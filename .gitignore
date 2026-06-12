@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Build
+_build/
+builddir/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+/tmp/
+*.swp
+*.swo
+
+# Debug artifacts
+debug/*.log
+debug/*.png
+debug/*.svg
+
+# Test output
+test_output/
+*.test.pdf
+
+# Flatpak
+.flatpak-builder/
