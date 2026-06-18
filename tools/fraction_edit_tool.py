@@ -13,14 +13,44 @@ _BUILTIN_FONTS = {
 
 def _builtin_font(font_name):
     name = font_name.lower().replace(" ", "")
-    for base_name, variants in {
-        "helv": ["helv", "helvetica", "arial", "arialmt"],
-        "cour": ["cour", "courier"],
-        "tiro": ["tiro", "times", "timesroman"],
-    }.items():
-        if name in variants:
-            return base_name
-    return "helv"
+
+    if name.endswith("mt"):
+        name = name[:-2]
+
+    parts = name.rsplit("-", 1)
+    base_part = parts[0]
+    style_part = parts[1] if len(parts) > 1 else ""
+
+    if style_part not in ("bold", "italic", "oblique", "bolditalic", "boldoblique"):
+        style_part = ""
+
+    font_groups = [
+        (["helv", "helvetica", "arial"], "Helvetica", {"italic": "Oblique", "bolditalic": "BoldOblique"}),
+        (["cour", "courier", "couriernew"], "Courier", {"italic": "Oblique", "bolditalic": "BoldOblique"}),
+        (["tiro", "times", "timesroman", "timesnewroman"], ("Times-Roman", "Times"), {"italic": "Italic", "bolditalic": "BoldItalic"}),
+    ]
+
+    style_map = {
+        "bold": "Bold", "italic": "Italic", "oblique": "Oblique",
+        "bolditalic": "BoldItalic", "boldoblique": "BoldOblique",
+    }
+
+    for prefixes, pdf_name, style_overrides in font_groups:
+        if base_part in prefixes or any(base_part.startswith(p) for p in prefixes):
+            mapped_style = style_overrides.get(style_part, style_map.get(style_part, ""))
+            if isinstance(pdf_name, tuple):
+                base_regular, base_styled = pdf_name
+                if mapped_style:
+                    return f"{base_styled}-{mapped_style}"
+                return base_regular
+            if mapped_style:
+                return f"{pdf_name}-{mapped_style}"
+            return pdf_name
+
+    fallback_style = style_map.get(style_part, "")
+    if fallback_style:
+        return f"Helvetica-{fallback_style}"
+    return "Helvetica"
 
 
 class FractionEditTool(Tool):

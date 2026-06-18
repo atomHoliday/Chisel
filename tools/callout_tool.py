@@ -1,6 +1,7 @@
+import pymupdf
 from tools.base import Tool
-from drawing.overlay import draw_preview_callout
-from drawing.callout import draw_callout_on_page
+from tools.fraction_edit_tool import _builtin_font
+from drawing.overlay import draw_preview_callout, _compute_box, _edge_point
 
 
 class CalloutTool(Tool):
@@ -12,20 +13,17 @@ class CalloutTool(Tool):
         self._origin = None
         self._current = None
         self._is_dragging = False
-        self._mode = None
 
     def activate(self):
         self._origin = None
         self._current = None
         self._is_dragging = False
-        self._mode = None
         self._canvas.queue_draw()
 
     def deactivate(self):
         self._origin = None
         self._current = None
         self._is_dragging = False
-        self._mode = None
         self._canvas.queue_draw()
 
     def on_drag_begin(self, x, y, scale, scroll_x, scroll_y):
@@ -33,7 +31,6 @@ class CalloutTool(Tool):
         self._origin = (px, py)
         self._current = (px, py)
         self._is_dragging = True
-        self._mode = "leader"
         return True
 
     def on_drag_update(self, x, y, scale, scroll_x, scroll_y):
@@ -52,18 +49,51 @@ class CalloutTool(Tool):
         if self._is_dragging and self._origin and self._current:
             ox, oy = self._origin
             cx, cy = self._current
-            box_w = 120
-            box_h = 40
-            bx0 = cx
-            by0 = cy - box_h / 2
-            bx1 = cx + box_w
-            by1 = cy + box_h / 2
             page = doc._doc[self._canvas.page_num]
             color = self._props.get("stroke_color", (0, 0, 0))
             width = self._props.get("stroke_width", 1)
             text = self._props.get("callout_text", "")
-            draw_callout_on_page(page, bx0, by0, bx1, by1, ox, oy,
-                                 color=color, width=width, text=text)
+
+            font_size = 10
+            padding = 8
+            box_w = max(80, len(text) * font_size * 0.65 + padding * 2)
+            box_h = max(50, font_size * 1.5 + padding * 2)
+            bx0, by0, bx1, by1 = _compute_box(ox, oy, cx, cy, box_w, box_h)
+
+            # Oval annotation for the outline
+            oval = page.add_circle_annot((bx0, by0, bx1, by1))
+            oval.set_colors(stroke=color)
+            oval.set_border(width=width)
+            oval.update()
+
+            # Text rendered directly on page content
+            if text:
+                bcx = (bx0 + bx1) / 2
+                bcy = (by0 + by1) / 2
+                text_w = len(text) * font_size * 0.33
+                fontname = _builtin_font("Helvetica")
+                page.insert_text(
+                    (bcx - text_w / 2, bcy + font_size * 0.35),
+                    text,
+                    fontsize=font_size,
+                    fontname=fontname,
+                    color=color,
+                )
+
+            # Leader line from oval edge to origin, arrow at origin
+            ex, ey = _edge_point(bx0, by0, bx1, by1, ox, oy)
+            line_annot = page.add_line_annot((ex, ey), (ox, oy))
+            line_annot.set_colors(stroke=color)
+            line_annot.set_border(width=width)
+            line_annot.set_line_ends(pymupdf.PDF_ANNOT_LE_NONE, pymupdf.PDF_ANNOT_LE_OPEN_ARROW)
+            line_annot.update()
+
+            # Small filled circle at origin
+            dot = page.add_circle_annot((ox - 2, oy - 2, ox + 2, oy + 2))
+            dot.set_colors(fill=color)
+            dot.set_border(width=0)
+            dot.update()
+
             self._canvas._pixbuf = None
             self._canvas.queue_draw()
         self._reset()
@@ -73,7 +103,6 @@ class CalloutTool(Tool):
         self._origin = None
         self._current = None
         self._is_dragging = False
-        self._mode = None
 
     def draw_overlay(self, cr, width, height, scale, scroll_x, scroll_y):
         if self._is_dragging and self._origin and self._current:
@@ -83,9 +112,16 @@ class CalloutTool(Tool):
             oys = oy * scale + scroll_y
             cxs = cx * scale + scroll_x
             cys = cy * scale + scroll_y
-            box_w = 120 * scale
-            box_h = 40 * scale
             color = self._props.get("stroke_color", (0, 0, 0))
-            width = self._props.get("stroke_width", 1)
-            draw_preview_callout(cr, cxs, cys - box_h / 2, cxs + box_w, cys + box_h / 2,
-                                 oxs, oys, color=color, width=width)
+            line_width = self._props.get("stroke_width", 1)
+            text = self._props.get("callout_text", "")
+
+            font_size = 10
+            padding = 8
+            box_w = max(80, len(text) * font_size * 0.65 + padding * 2)
+            box_h = max(50, font_size * 1.5 + padding * 2)
+            box_w_s = box_w * scale
+            box_h_s = box_h * scale
+
+            draw_preview_callout(cr, oxs, oys, cxs, cys, box_w_s, box_h_s,
+                                 text, color=color, width=line_width)

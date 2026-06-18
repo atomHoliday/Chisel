@@ -25,6 +25,7 @@ class PdfCanvas(Gtk.DrawingArea):
         self._is_pressed = False
         self._has_moved = False
         self._ctrl_held = False
+        self._selected_item = None
 
         self.set_vexpand(True)
         self.set_hexpand(True)
@@ -74,6 +75,7 @@ class PdfCanvas(Gtk.DrawingArea):
         self._scroll_x = 0.0
         self._scroll_y = 0.0
         self._pixbuf = None
+        self._selected_item = None
         self.queue_draw()
 
     def set_page(self, page_num):
@@ -83,6 +85,7 @@ class PdfCanvas(Gtk.DrawingArea):
         self._scroll_x = 0.0
         self._scroll_y = 0.0
         self._pixbuf = None
+        self._selected_item = None
         self.queue_draw()
 
     def _get_pixbuf(self):
@@ -201,10 +204,29 @@ class PdfCanvas(Gtk.DrawingArea):
 
     def _on_key_pressed(self, controller, keyval, keycode, state):
         ctrl = state & Gdk.ModifierType.CONTROL_MASK
+        if ctrl and keyval == Gdk.KEY_c:
+            if self._active_tool:
+                self._active_tool.on_copy()
+            return True
         if ctrl and keyval == Gdk.KEY_v:
             if self._active_tool:
                 self._active_tool.on_paste()
             return True
+        if keyval in (Gdk.KEY_Delete, Gdk.KEY_BackSpace) and self._selected_item:
+            page = self._document._doc[self._page_num]
+            if self._selected_item["type"] == "annot":
+                page.delete_annot(self._selected_item["annot"])
+            elif self._selected_item["type"] == "text":
+                span = self._selected_item["span"]
+                annot = page.add_redact_annot(span.bbox)
+                annot.set_colors(fill=(1, 1, 1))
+                page.apply_redactions()
+                page.clean_contents()
+            self._selected_item = None
+            self._pixbuf = None
+            self.queue_draw()
+            return True
+
         if not self._document:
             return False
         if keyval == Gdk.KEY_plus or keyval == Gdk.KEY_equal:

@@ -1,6 +1,6 @@
+import pymupdf
 from tools.base import Tool
 from drawing.overlay import draw_preview_line, draw_preview_arrow
-from drawing.shapes import draw_line_on_page, draw_arrow_on_page
 
 
 class LineTool(Tool):
@@ -49,10 +49,17 @@ class LineTool(Tool):
                 color = self._props.get("stroke_color", (0, 0, 0))
                 width = self._props.get("stroke_width", 1)
                 is_arrow = self._props.get("has_arrow", False)
+
+                annot = page.add_line_annot((sx, sy), (ex, ey))
+                annot.set_colors(stroke=color)
+                annot.set_border(width=width)
                 if is_arrow:
-                    draw_arrow_on_page(page, sx, sy, ex, ey, color=color, width=width)
-                else:
-                    draw_line_on_page(page, sx, sy, ex, ey, color=color, width=width)
+                    annot.set_line_ends(
+                        pymupdf.PDF_ANNOT_LE_OPEN_ARROW,
+                        pymupdf.PDF_ANNOT_LE_NONE,
+                    )
+                annot.update()
+
                 self._canvas._pixbuf = None
                 self._canvas.queue_draw()
         self._start = None

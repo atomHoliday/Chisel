@@ -1,6 +1,6 @@
+import pymupdf
 from tools.base import Tool
 from drawing.overlay import draw_preview_rect, draw_preview_circle
-from drawing.shapes import draw_rect_on_page, draw_circle_on_page
 
 
 class ShapeTool(Tool):
@@ -50,13 +50,19 @@ class ShapeTool(Tool):
                 width = self._props.get("stroke_width", 1)
                 fill = self._props.get("fill_color", None)
                 shape_type = self._props.get("shape_type", "rectangle")
+                rect = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
+
                 if shape_type == "circle":
-                    cx = (sx + ex) / 2
-                    cy = (sy + ey) / 2
-                    r = max(abs(ex - sx), abs(ey - sy)) / 2
-                    draw_circle_on_page(page, cx, cy, r, color=color, width=width, fill=fill)
+                    annot = page.add_circle_annot(rect)
                 else:
-                    draw_rect_on_page(page, sx, sy, ex, ey, color=color, width=width, fill=fill)
+                    annot = page.add_rect_annot(rect)
+
+                annot.set_colors(stroke=color, fill=fill)
+                annot.set_border(width=width)
+                annot.update()
+                if fill:
+                    annot.set_opacity(0.3)
+
                 self._canvas._pixbuf = None
                 self._canvas.queue_draw()
         self._start = None

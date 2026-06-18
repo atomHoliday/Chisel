@@ -1,0 +1,81 @@
+## Goal
+- Build a lightweight GNOME PDF editor (Chisel) focused on editing telecom tower mapping reports
+
+## Constraints & Preferences
+- GTK 4 + libadwaita + PyGObject stack, Python 3
+- PyMuPDF for PDF rendering and manipulation, Cairo for canvas overlays
+- Target: text editing, stacked fractions, annotations, image insertion, page management
+- App ID: `com.uncapyeti.chisel`
+- Use programmatic UI (not .blp templates) for all widgets
+- Icon names from Yaru theme only; verified at `/usr/share/icons/Yaru/scalable/actions/`
+- Running on Wayland (no xdotool for automated GUI testing)
+
+## Progress
+### Done
+- Installed deps: PyMuPDF (pip), blueprint-compiler (pip), python3-gi-cairo (extracted + .pth)
+- Phase 1–7: PDF viewer, page sidebar, text selection, fraction detection/editing, image insertion, annotation tools (highlight/line/shape/callout), cut/flatten/save
+- App icon + desktop entry installed
+- Fixed sidebar height: `set_vexpand(True)` on PageSidebar and ScrolledWindow
+- Restored toolbar icons with Yaru symbolic names; Frac/Line kept as text labels
+- Rewired tool toggle buttons in window.py tool loop
+- Rewrote gesture system: GestureClick + EventControllerMotion (removed GestureDrag)
+- Ctrl+drag panning: when tool active, Ctrl+drag pans; Pan tool always pans
+- Added `_tool_is_dragging`, `_is_pressed`, `_has_moved`, `_ctrl_held` state flags in canvas
+- Fraction tool crash fixed: `_close_popover` re-entrant bug — saved to local var before nullifying `self._popover`
+- Fraction bbox narrowed: removed `line_x0`/`line_x1` from bbox, uses only text span bounds
+- Fraction detection distance relaxed: `max(span_width * 3, 30)` instead of `line_width * 0.8`
+- Fraction detection without lines: stacked pairs detected when gap ≤ 12px even without a nearby line
+- Fraction apply rewritten: per-span redaction (`num_bbox`, `den_bbox`), `clean_contents()`, correct `font_size`/`font_name` from source spans
+- Fraction font info added: `font_size`, `font_name`, `num_bbox`, `den_bbox` stored in Fraction class
+- Zoom +/- buttons fixed: `_zoom()` now sets `self._canvas._pixbuf = None` (was missing, cached old render)
+- Fullscreen/maximize auto-fit: connected `notify::fullscreened` and `notify::maximized` to schedule `_do_zoom_fit` via `GLib.idle_add`
+- Stacked fraction detection added: `get_page_chars()` in text_model.py extracts individual glyphs from `rawdict`
+- `_detect_fractions_without_lines` uses char-level data with tolerances (digit-only, fs < 5.5, overlap ≥ -2px, gap -5 to 25)
+- **Fixed stacked fraction num/den ordering**: removed `ay1 - by0 > 5` directional check, added overlap heuristic:
+  - If vertical overlap > 30% → chars on same line → use list order (left-to-right = num first)
+  - If no overlap/gap → use vertical position (higher on page = numerator)
+  - This fixes the GAP area fraction being missed entirely, and keeps "5 1/2" TYP in correct '1'/'2' order despite the PDF placing chars at similar y-positions
+- File-based debug logging (`_log()` to `/tmp/chisel_text_debug.txt`) in TextEditTool for click flow tracing
+
+### In Progress
+- GAP area "3 1/2" detected as '2'/'1' (geometrically correct; PDF places "2" above "1")
+- TextEditTool entry overlay still not appearing despite span detection working
+
+### Blocked
+- (none)
+
+## Key Decisions
+- GestureClick + EventControllerMotion instead of GestureDrag to fix gesture conflicts
+- Ctrl+drag pans when tool active; Pan tool always pans without Ctrl
+- Toolbar uses Yaru symbolic icons; Frac/Line kept as text (no matching icons)
+- Debug output to `/tmp/chisel_text_debug.txt` because Wayland hides terminal stderr
+- Stacked fraction detection uses character-level (`rawdict`) data with digit-only + font-size filters
+- Num/den ordering uses overlap heuristic: >30% vertical overlap → same-line ordering; else → geometric ordering
+
+## Next Steps
+- Debug TextEditTool entry invisibility: add try/except in `_show_entry` to catch the silent crash (log stops after `entry pos=`, never reaches `overlay type=`)
+- Reduce false positives from line-based detection (e.g., "BASE DETAILS/PLAN VIEW")
+- Add text-based stacked line detection (horizontal bar Unicode characters) for PDFs where fraction bars aren't vector drawings
+
+## Critical Context
+- Python 3.14.4, PyGObject 3.56.2, GTK 4.22.2, libadwaita
+- Wayland session (no xdotool)
+- Tower PDFs at `/home/holiday/Desktop/Tower PDF/`
+- `python3-gi-cairo` `.pth` at `~/.local/lib/python3.14/site-packages/gi_cairo.pth`
+- `GestureClick::released(n_press, x, y)` provides release coordinates in widget space; press stored in `_press_pos`
+- `EventControllerMotion::motion(x, y)` provides absolute pointer position
+- TextEditTool uses `self._overlay.add_overlay()` with margin-based positioning — entry render failure is suspected silent crash in Gtk.Entry setup
+- `notify::fullscreened` and `notify::maximized` both trigger zoom-fit; `GLib.idle_add` ensures post-resize allocation
+
+## Relevant Files
+- `/home/holiday/chisel/canvas.py`: DrawingArea — gesture handling (GestureClick + EventControllerMotion), Ctrl+drag pan logic, rendering
+- `/home/holiday/chisel/window.py`: Main window — toolbar config, tool wiring, zoom controls, fullscreen/maximize zoom-fit
+- `/home/holiday/chisel/tools/text_edit_tool.py`: Text editor — `_show_entry` adds Gtk.Entry to overlay, debug logging to `/tmp/chisel_text_debug.txt`
+- `/home/holiday/chisel/tools/fraction_edit_tool.py`: Fraction editor — popover with numerator/denominator entry, `_on_apply` with redaction + text insertion
+- `/home/holiday/chisel/tools/base.py`: Tool base class — `on_click`, `on_drag_begin/update/end`, page↔canvas coordinate helpers
+- `/home/holiday/chisel/document/text_model.py`: `get_page_spans` (word-level), `get_page_chars` (glyph-level from `rawdict`), `find_span_at`
+- `/home/holiday/chisel/document/fraction_detector.py`: `Fraction` class, `detect_fractions` (line-based), `_detect_fractions_without_lines` (glyph-based stacked detection)
+- `/home/holiday/chisel/document/pdf_document.py`: PyMuPDF wrapper — load, render_page, save
+- `/home/holiday/chisel/main.py`: Adw.Application entry point with HANDLES_OPEN
+- `/home/holiday/chisel/com.uncapyeti.chisel.svg`: App icon
+- `/home/holiday/chisel/chisel`: Shell launcher (`exec python3 main.py "$@"`)

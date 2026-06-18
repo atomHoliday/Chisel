@@ -26,6 +26,12 @@ class Tool:
     def on_paste(self):
         return False
 
+    def on_copy(self):
+        return False
+
+    def on_delete(self):
+        return False
+
     def draw_overlay(self, cr, width, height, scale, scroll_x, scroll_y):
         pass
 

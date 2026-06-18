@@ -132,7 +132,7 @@ class PropertiesPanel(Gtk.Popover):
 
     def _on_fill(self, btn):
         if btn.get_active():
-            self._props.set("fill_color", (1, 1, 0, 0.3))
+            self._props.set("fill_color", (1, 1, 0))
         else:
             self._props.set("fill_color", None)
 
