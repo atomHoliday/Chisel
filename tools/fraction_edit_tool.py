@@ -1,4 +1,5 @@
-from gi.repository import Gtk, Gdk, Gio
+import sys
+from gi.repository import Gtk, Gdk, Gio, Adw
 
 from tools.base import Tool
 from document.fraction_detector import detect_fractions, find_fraction_at
@@ -25,9 +26,10 @@ def _builtin_font(font_name):
 class FractionEditTool(Tool):
     name = "fraction"
 
-    def __init__(self, canvas, document, overlay):
+    def __init__(self, canvas, document, overlay, toast_overlay):
         super().__init__(canvas, document)
         self._overlay = overlay
+        self._toast_overlay = toast_overlay
         self._fractions = []
         self._selected_fraction = None
         self._page_num = -1
@@ -131,7 +133,7 @@ class FractionEditTool(Tool):
         popover = self._popover
         self._popover = None
         if popover:
-            popover.close()
+            popover.popdown()
             popover.unparent()
         self._num_entry = None
         self._den_entry = None
@@ -151,37 +153,92 @@ class FractionEditTool(Tool):
         try:
             page = doc._doc[self._page_num]
 
-            num_bbox = frac.num_bbox or frac.bbox
-            den_bbox = frac.den_bbox or frac.bbox
-            num_annot = page.add_redact_annot(num_bbox)
-            num_annot.set_colors(fill=(1, 1, 1))
-            den_annot = page.add_redact_annot(den_bbox)
-            den_annot.set_colors(fill=(1, 1, 1))
+            # Capture vector drawings that overlap the fraction area
+            fx0, fy0, fx1, fy1 = frac.bbox
+            captured = []
+            for d in page.get_drawings():
+                dr = d["rect"]
+                if dr.x0 < fx1 and dr.x1 > fx0 and dr.y0 < fy1 and dr.y1 > fy0:
+                    captured.append({
+                        "items": d["items"],
+                        "color": d.get("color", (0, 0, 0)),
+                        "width": d.get("width", 0),
+                        "fill": d.get("fill"),
+                        "dashes": d.get("dashes"),
+                        "lineCap": d.get("lineCap"),
+                        "lineJoin": d.get("lineJoin"),
+                        "closePath": d.get("closePath", True),
+                        "stroke_opacity": d.get("stroke_opacity", 1),
+                        "fill_opacity": d.get("fill_opacity", 1),
+                    })
+            print(f"[FRAC] captured {len(captured)} drawings to re-draw", file=sys.stderr)
+            page.add_redact_annot(frac.bbox).set_colors(fill=(1, 1, 1))
             page.apply_redactions()
             page.clean_contents()
 
             font_size = frac.font_size or 14
             font_name = _builtin_font(frac.font_name or "helv")
+            offset = font_size * 0.15
 
             if new_num:
+                nb = frac.num_bbox or frac.bbox
+                num_pos = frac.num_origin or (nb[0], nb[3])
+                num_pos = (num_pos[0], num_pos[1] - offset)
                 page.insert_text(
-                    (num_bbox[0], num_bbox[3]),
+                    (num_pos[0], num_pos[1]),
                     new_num,
                     fontsize=font_size,
                     fontname=font_name,
                     color=(0, 0, 0),
                 )
             if new_den:
+                db = frac.den_bbox or frac.bbox
+                den_pos = frac.den_origin or (db[0], db[3])
+                den_pos = (den_pos[0], den_pos[1] + offset)
                 page.insert_text(
-                    (den_bbox[0], den_bbox[3]),
+                    (den_pos[0], den_pos[1]),
                     new_den,
                     fontsize=font_size,
                     fontname=font_name,
                     color=(0, 0, 0),
                 )
+
+            # Re-draw captured vector lines (so they aren't erased by redaction)
+            for cap in captured:
+                shape = page.new_shape()
+                for item in cap["items"]:
+                    cmd = item[0]
+                    if cmd == "l":
+                        shape.draw_line(item[1], item[2])
+                    elif cmd == "re":
+                        shape.draw_rect(item[1])
+                    elif cmd == "qu":
+                        shape.draw_quad(item[1])
+                    elif cmd == "cur":
+                        shape.draw_bezier(item[1], item[2], item[3], item[4])
+                kw = dict(
+                    width=cap["width"],
+                    color=cap["color"],
+                    fill=cap["fill"],
+                    closePath=cap["closePath"],
+                    dashes=cap["dashes"],
+                    lineCap=cap["lineCap"],
+                    lineJoin=cap["lineJoin"],
+                )
+                if cap["stroke_opacity"] is not None:
+                    kw["stroke_opacity"] = cap["stroke_opacity"]
+                if cap["fill_opacity"] is not None:
+                    kw["fill_opacity"] = cap["fill_opacity"]
+                shape.finish(**kw)
+                shape.commit()
+
+            if self._toast_overlay:
+                self._toast_overlay.add_toast(Adw.Toast.new("Fraction updated"))
         except Exception:
             import traceback
             traceback.print_exc()
+            if self._toast_overlay:
+                self._toast_overlay.add_toast(Adw.Toast.new("Error updating fraction"))
             self._close_popover()
             return
 

@@ -289,6 +289,8 @@ class ChiselWindow(Adw.ApplicationWindow):
 
         self._overlay = Gtk.Overlay()
         self._overlay.set_child(self._canvas)
+        self._toast_overlay = Adw.ToastOverlay()
+        self._toast_overlay.set_child(self._overlay)
         self._setup_tools()
 
         self.set_default_size(1024, 768)
@@ -414,12 +416,9 @@ class ChiselWindow(Adw.ApplicationWindow):
         self._sidebar = PageSidebar(self._page_manager)
         self._sidebar.connect("page-selected", self._on_sidebar_page_selected)
 
-        toast_overlay = Adw.ToastOverlay()
-        toast_overlay.set_child(self._overlay)
-
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_start_child(self._sidebar)
-        paned.set_end_child(toast_overlay)
+        paned.set_end_child(self._toast_overlay)
         paned.set_shrink_start_child(False)
         paned.set_resize_start_child(False)
 
@@ -435,8 +434,8 @@ class ChiselWindow(Adw.ApplicationWindow):
         self._tools = {
             "pan": None,
             "select": SelectTool(self._canvas, self._document),
-            "text_edit": TextEditTool(self._canvas, self._document, self._overlay),
-            "fraction": FractionEditTool(self._canvas, self._document, self._overlay),
+            "text_edit": TextEditTool(self._canvas, self._document, self._overlay, self._toast_overlay),
+            "fraction": FractionEditTool(self._canvas, self._document, self._overlay, self._toast_overlay),
             "image": ImageTool(self._canvas, self._document, self),
             "highlight": HighlightTool(self._canvas, self._document, self._props),
             "line": LineTool(self._canvas, self._document, self._props),

@@ -1,6 +1,8 @@
 class Fraction:
     def __init__(self, page_num, bbox, numerator_text, denominator_text, line_rect,
-                 font_size=None, font_name="helv", num_bbox=None, den_bbox=None):
+                 font_size=None, font_name="helv", num_bbox=None, den_bbox=None,
+                 num_origin=None, den_origin=None,
+                 sep_bbox=None, sep_origin=None, sep_text=None):
         self.page_num = page_num
         self.bbox = bbox
         self.numerator_text = numerator_text
@@ -10,10 +12,16 @@ class Fraction:
         self.font_name = font_name
         self.num_bbox = num_bbox
         self.den_bbox = den_bbox
+        self.num_origin = num_origin
+        self.den_origin = den_origin
+        self.sep_bbox = sep_bbox
+        self.sep_origin = sep_origin
+        self.sep_text = sep_text
 
     @property
     def display_text(self):
-        return f"{self.numerator_text}/{self.denominator_text}"
+        sep = self.sep_text or "/"
+        return f"{self.numerator_text}{sep}{self.denominator_text}"
 
     def __repr__(self):
         return f"Fraction({self.numerator_text}/{self.denominator_text} @ {self.bbox})"
@@ -101,6 +109,8 @@ def detect_fractions(doc, page_num):
                 font_name=font_name,
                 num_bbox=a_span.bbox,
                 den_bbox=b_span.bbox,
+                num_origin=a_span.origin,
+                den_origin=b_span.origin,
             ))
 
     remaining = [s for i, s in enumerate(spans) if i not in used_spans]
@@ -191,6 +201,8 @@ def _detect_fractions_without_lines(doc, page_num, lines):
                 font_name=font_name,
                 num_bbox=num.bbox,
                 den_bbox=den.bbox,
+                num_origin=num.origin,
+                den_origin=den.origin,
             ))
             break
 
