@@ -1,0 +1,36 @@
+class Tool:
+    name = "tool"
+
+    def __init__(self, canvas, document):
+        self._canvas = canvas
+        self._document = document
+
+    def activate(self):
+        pass
+
+    def deactivate(self):
+        pass
+
+    def on_click(self, x, y, scale, scroll_x, scroll_y):
+        return False
+
+    def on_drag_begin(self, x, y, scale, scroll_x, scroll_y):
+        return False
+
+    def on_drag_update(self, x, y, scale, scroll_x, scroll_y):
+        return False
+
+    def on_drag_end(self, x, y, scale, scroll_x, scroll_y):
+        return False
+
+    def on_paste(self):
+        return False
+
+    def draw_overlay(self, cr, width, height, scale, scroll_x, scroll_y):
+        pass
+
+    def page_to_canvas(self, px, py, scale, scroll_x, scroll_y):
+        return px * scale + scroll_x, py * scale + scroll_y
+
+    def canvas_to_page(self, cx, cy, scale, scroll_x, scroll_y):
+        return (cx - scroll_x) / scale, (cy - scroll_y) / scale

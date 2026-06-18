@@ -153,8 +153,10 @@ class FractionEditTool(Tool):
 
             num_bbox = frac.num_bbox or frac.bbox
             den_bbox = frac.den_bbox or frac.bbox
-            page.add_redact_annot(num_bbox)
-            page.add_redact_annot(den_bbox)
+            num_annot = page.add_redact_annot(num_bbox)
+            num_annot.set_colors(fill=(1, 1, 1))
+            den_annot = page.add_redact_annot(den_bbox)
+            den_annot.set_colors(fill=(1, 1, 1))
             page.apply_redactions()
             page.clean_contents()
 
@@ -167,6 +169,7 @@ class FractionEditTool(Tool):
                     new_num,
                     fontsize=font_size,
                     fontname=font_name,
+                    color=(0, 0, 0),
                 )
             if new_den:
                 page.insert_text(
@@ -174,12 +177,11 @@ class FractionEditTool(Tool):
                     new_den,
                     fontsize=font_size,
                     fontname=font_name,
+                    color=(0, 0, 0),
                 )
-        except Exception as e:
-            with open("/tmp/chisel_frac_error.txt", "a") as f:
-                f.write("FRAC ERROR in _on_apply: %s\n" % str(e))
-                import traceback
-                traceback.print_exc(file=f)
+        except Exception:
+            import traceback
+            traceback.print_exc()
             self._close_popover()
             return
 

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Chisel
+Comment=Lightweight PDF Editor for GNOME
+Exec=chisel %F
+Icon=com.uncapyeti.chisel
+Terminal=false
+Categories=Office;Graphics;
+StartupNotify=true
+MimeType=application/pdf;
