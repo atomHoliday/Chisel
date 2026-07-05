@@ -1,4 +1,5 @@
 from tools.base import Tool
+from drawing.theme import CUT_FILL, CUT_BORDER, CUT_WIDTH
 
 
 class CutTool(Tool):
@@ -66,11 +67,11 @@ class CutTool(Tool):
             w = abs(ex - sx) * scale
             h = abs(ey - sy) * scale
             cr.save()
-            cr.set_source_rgba(1, 0, 0, 0.15)
+            cr.set_source_rgba(*CUT_FILL)
             cr.rectangle(x, y, w, h)
             cr.fill()
-            cr.set_source_rgba(1, 0, 0, 0.8)
-            cr.set_line_width(2)
+            cr.set_source_rgba(*CUT_BORDER)
+            cr.set_line_width(CUT_WIDTH)
             cr.set_dash([6, 4], 0)
             cr.rectangle(x, y, w, h)
             cr.stroke()

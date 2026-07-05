@@ -7,6 +7,7 @@ from document.image_handler import (
     supported_image_extensions,
     get_image_natural_size,
 )
+from drawing.theme import IMAGE_FILL, IMAGE_BORDER, IMAGE_WIDTH
 
 
 class ImageTool(Tool):
@@ -194,11 +195,11 @@ class ImageTool(Tool):
             h = abs(ey - sy) * scale
 
             cr.save()
-            cr.set_source_rgba(0.2, 0.5, 1.0, 0.15)
+            cr.set_source_rgba(*IMAGE_FILL)
             cr.rectangle(x, y, w, h)
             cr.fill()
-            cr.set_source_rgba(0.2, 0.5, 1.0, 0.8)
-            cr.set_line_width(1.5)
+            cr.set_source_rgba(*IMAGE_BORDER)
+            cr.set_line_width(IMAGE_WIDTH)
             cr.set_dash([4, 4], 0)
             cr.rectangle(x, y, w, h)
             cr.stroke()

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "chisel-pdf"
+version = "0.1.0"
+description = "The interactive PDF editor"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "pymupdf>=1.24.0",
+]
+
+[project.scripts]
+chisel = "main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

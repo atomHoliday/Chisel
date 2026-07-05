@@ -2,7 +2,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Gdk, GdkPixbuf, Adw
 from gi.repository import cairo
 from gi.repository import GLib
 
@@ -50,6 +51,8 @@ class PdfCanvas(Gtk.DrawingArea):
         self._scale = 1.0
         self._scroll_x = 0.0
         self._scroll_y = 0.0
+        self._center_x = 0.0
+        self._center_y = 0.0
         self._press_pos = None
         self._drag_start_scroll = None
         self._pixbuf = None
@@ -59,6 +62,9 @@ class PdfCanvas(Gtk.DrawingArea):
         self._has_moved = False
         self._ctrl_held = False
         self._selected_item = None
+        self._continuous = False
+        self._page_cache = {}
+        self._page_offsets = []
 
         self.set_vexpand(True)
         self.set_hexpand(True)
@@ -88,6 +94,9 @@ class PdfCanvas(Gtk.DrawingArea):
 
         self.set_focusable(True)
         self.set_can_focus(True)
+        self.update_property(
+            [Gtk.AccessibleProperty.LABEL], ["PDF document canvas"]
+        )
 
     def set_active_tool(self, tool):
         if self._active_tool:
@@ -107,7 +116,7 @@ class PdfCanvas(Gtk.DrawingArea):
         self._scale = 1.0
         self._scroll_x = 0.0
         self._scroll_y = 0.0
-        self._pixbuf = None
+        self._invalidate_cache()
         self._selected_item = None
         self.queue_draw()
 
@@ -116,8 +125,11 @@ class PdfCanvas(Gtk.DrawingArea):
             return
         self._page_num = max(0, min(page_num, self._document.page_count - 1))
         self._scroll_x = 0.0
-        self._scroll_y = 0.0
-        self._pixbuf = None
+        if self._continuous and self._page_offsets:
+            self._scroll_y = self._page_offsets[self._page_num][1]
+        else:
+            self._scroll_y = 0.0
+        self._invalidate_cache()
         self._selected_item = None
         self.queue_draw()
 
@@ -133,11 +145,85 @@ class PdfCanvas(Gtk.DrawingArea):
         self._pixbuf = stream.get_pixbuf()
         return self._pixbuf
 
+    def _get_page_pixbuf(self, page_num):
+        key = (page_num, self._scale)
+        if key not in self._page_cache:
+            png_data, w, h = self._document.render_page(page_num, self._scale)
+            stream = GdkPixbuf.PixbufLoader.new_with_mime_type("image/png")
+            stream.write(png_data)
+            stream.close()
+            self._page_cache[key] = stream.get_pixbuf()
+        return self._page_cache[key]
+
+    def _rebuild_page_offsets(self):
+        doc = self._document
+        if not doc or not doc.is_loaded:
+            self._page_offsets = []
+            return
+        offs = []
+        y = 0
+        for p in range(doc.page_count):
+            pw, ph = doc.get_page_size(p)
+            pw_disp = pw * self._scale
+            ph_disp = ph * self._scale
+            offs.append((p, y, pw_disp, ph_disp))
+            y += ph_disp + 20
+        self._page_offsets = offs
+
+    def _find_page_at_y(self, canvas_y, scale, scroll_y):
+        doc_y = canvas_y + scroll_y
+        for p, py, pw_disp, ph_disp in self._page_offsets:
+            if py <= doc_y < py + ph_disp:
+                return p, py
+        if self._page_offsets:
+            if doc_y < 0:
+                return self._page_offsets[0][0], self._page_offsets[0][1]
+            last = self._page_offsets[-1]
+            return last[0], last[1]
+        return 0, 0
+
+    def _continuous_scroll_y(self, page_offset):
+        return self._scroll_y - page_offset
+
+    def _invalidate_cache(self):
+        self._pixbuf = None
+        self._page_cache = {}
+        self._page_offsets = []
+
+    def toggle_continuous(self):
+        self._continuous = not self._continuous
+        self._invalidate_cache()
+        self._scroll_x = 0.0
+        self._scroll_y = 0.0
+        self._page_num = 0
+        self._selected_item = None
+        self.queue_draw()
+
+    @property
+    def _draw_x(self):
+        return self._scroll_x + self._center_x
+
+    @property
+    def _draw_y(self):
+        return self._scroll_y + self._center_y
+
+    def _is_dark(self):
+        return Adw.StyleManager.get_default().get_dark()
+
     def _draw_welcome(self, cr, w, h):
+        dark = self._is_dark()
         cx = w / 2
         top = 40
 
-        cr.set_source_rgb(0.2, 0.2, 0.2)
+        title_color = (0.9, 0.9, 0.9) if dark else (0.2, 0.2, 0.2)
+        sub_color = (0.55, 0.55, 0.55) if dark else (0.4, 0.4, 0.4)
+        header_color = (0.8, 0.8, 0.8) if dark else (0.2, 0.2, 0.2)
+        label_color = (0.5, 0.5, 0.5) if dark else (0.35, 0.35, 0.35)
+        key_color = (0.7, 0.7, 0.7) if dark else (0.25, 0.25, 0.25)
+        desc_color = (0.45, 0.45, 0.45) if dark else (0.45, 0.45, 0.45)
+        footer_color = (0.35, 0.35, 0.35) if dark else (0.55, 0.55, 0.55)
+
+        cr.set_source_rgb(*title_color)
         cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
         cr.set_font_size(24)
         label = "Chisel"
@@ -145,7 +231,7 @@ class PdfCanvas(Gtk.DrawingArea):
         cr.move_to(cx - te.width / 2, top + te.height)
         cr.show_text(label)
 
-        cr.set_source_rgb(0.4, 0.4, 0.4)
+        cr.set_source_rgb(*sub_color)
         cr.select_font_face("Sans", cairo.FontSlant.ITALIC, cairo.FontWeight.NORMAL)
         cr.set_font_size(12)
         label = "The interactive PDF editor"
@@ -156,11 +242,10 @@ class PdfCanvas(Gtk.DrawingArea):
         left_x = 40
         right_x = cx + 20
         section_top = top + 70
-        col_w = cx - 60
 
         cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
 
-        cr.set_source_rgb(0.2, 0.2, 0.2)
+        cr.set_source_rgb(*header_color)
         cr.set_font_size(13)
         label = "Keyboard Shortcuts"
         cr.move_to(left_x, section_top)
@@ -170,33 +255,33 @@ class PdfCanvas(Gtk.DrawingArea):
         cr.move_to(right_x, section_top)
         cr.show_text(label)
 
-        cr.set_source_rgb(0.35, 0.35, 0.35)
+        cr.set_source_rgb(*label_color)
         cr.set_font_size(10)
 
         row_h = 18
         for i, (key, desc) in enumerate(_SHORTCUTS):
             y = section_top + 20 + i * row_h
             cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
-            cr.set_source_rgb(0.25, 0.25, 0.25)
+            cr.set_source_rgb(*key_color)
             cr.move_to(left_x + 10, y + 10)
             cr.show_text(key)
             cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
-            cr.set_source_rgb(0.45, 0.45, 0.45)
+            cr.set_source_rgb(*desc_color)
             cr.move_to(left_x + 130, y + 10)
             cr.show_text(desc)
 
         for i, (name, desc) in enumerate(_TOOLS):
             y = section_top + 20 + i * row_h
             cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
-            cr.set_source_rgb(0.25, 0.25, 0.25)
+            cr.set_source_rgb(*key_color)
             cr.move_to(right_x + 10, y + 10)
             cr.show_text(name)
             cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
-            cr.set_source_rgb(0.45, 0.45, 0.45)
+            cr.set_source_rgb(*desc_color)
             cr.move_to(right_x + 65, y + 10)
             cr.show_text(desc)
 
-        cr.set_source_rgb(0.55, 0.55, 0.55)
+        cr.set_source_rgb(*footer_color)
         cr.set_font_size(11)
         label = "Open a PDF to get started  (Ctrl+O)"
         te = cr.text_extents(label)
@@ -204,11 +289,18 @@ class PdfCanvas(Gtk.DrawingArea):
         cr.show_text(label)
 
     def _on_draw(self, area, cr, w, h):
-        cr.set_source_rgb(0.85, 0.85, 0.85)
+        if self._is_dark():
+            cr.set_source_rgb(0.15, 0.15, 0.15)
+        else:
+            cr.set_source_rgb(0.85, 0.85, 0.85)
         cr.paint()
 
         if not self._document or not self._document.is_loaded:
             self._draw_welcome(cr, w, h)
+            return
+
+        if self._continuous:
+            self._draw_continuous(cr, w, h)
             return
 
         pixbuf = self._get_pixbuf()
@@ -218,7 +310,13 @@ class PdfCanvas(Gtk.DrawingArea):
         disp_w = pixbuf.get_width()
         disp_h = pixbuf.get_height()
 
-        cr.translate(self._scroll_x, self._scroll_y)
+        self._center_x = max(0, (w - disp_w) / 2)
+        self._center_y = max(0, (h - disp_h) / 2)
+
+        draw_x = self._scroll_x + self._center_x
+        draw_y = self._scroll_y + self._center_y
+
+        cr.translate(draw_x, draw_y)
 
         cr.set_source_rgb(1, 1, 1)
         cr.rectangle(0, 0, disp_w, disp_h)
@@ -227,12 +325,77 @@ class PdfCanvas(Gtk.DrawingArea):
         Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
         cr.paint()
 
-        cr.translate(-self._scroll_x, -self._scroll_y)
+        cr.translate(-draw_x, -draw_y)
 
         if self._active_tool:
             self._active_tool.draw_overlay(
-                cr, w, h, self._scale, self._scroll_x, self._scroll_y
+                cr, w, h, self._scale, draw_x, draw_y
             )
+
+    def _draw_continuous(self, cr, w, h):
+        self._rebuild_page_offsets()
+        if not self._page_offsets:
+            return
+
+        gap = 20
+        last = self._page_offsets[-1]
+        total_h = last[1] + last[3]
+
+        max_scroll = max(0, total_h - h)
+        self._scroll_y = max(0, min(self._scroll_y, max_scroll))
+
+        # Update current page from viewport center
+        center_y = self._scroll_y + h / 2
+        for p, py, _, ph_disp in self._page_offsets:
+            if py <= center_y < py + ph_disp:
+                self._page_num = p
+                break
+
+        viewport_top = self._scroll_y - last[3]
+        viewport_bot = self._scroll_y + h + last[3]
+
+        for p, py, pw_disp, ph_disp in self._page_offsets:
+            if py + ph_disp < viewport_top or py > viewport_bot:
+                continue
+
+            pixbuf = self._get_page_pixbuf(p)
+            if pixbuf is None:
+                continue
+
+            center_x = max(0, (w - pw_disp) / 2)
+            draw_x = self._scroll_x + center_x
+            draw_y = py - self._scroll_y
+
+            cr.save()
+            cr.translate(draw_x, draw_y)
+            cr.set_source_rgb(1, 1, 1)
+            cr.rectangle(0, 0, pw_disp, ph_disp)
+            cr.fill()
+            Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
+            cr.paint()
+            cr.restore()
+
+        if self._active_tool and self._page_offsets:
+            p, poff, pw_disp, _ = self._page_offsets[self._page_num]
+            local_y = self._continuous_scroll_y(poff)
+            draw_x = self._scroll_x + max(0, (w - pw_disp) / 2)
+            draw_y = poff - self._scroll_y
+            self._active_tool.draw_overlay(
+                cr, w, h, self._scale, draw_x, draw_y
+            )
+
+    def _tool_scroll_for_pos(self, x, y):
+        if not self._continuous or not self._page_offsets:
+            return self._draw_x, self._scroll_y
+        p, poff = self._find_page_at_y(y, 1.0, self._scroll_y)
+        self._page_num = p
+        alloc = self.get_allocation()
+        w = alloc.width
+        pw_disp = self._page_offsets[p][2] if p < len(self._page_offsets) else 0
+        center_x = max(0, (w - pw_disp) / 2)
+        sx = self._scroll_x + center_x
+        sy = poff - self._scroll_y
+        return sx, sy
 
     def _on_click_pressed(self, gesture, n_press, x, y):
         self._press_pos = (x, y)
@@ -243,13 +406,15 @@ class PdfCanvas(Gtk.DrawingArea):
         if self._ctrl_held or self._active_tool is None:
             self._tool_is_dragging = False
         else:
+            sx, sy = self._tool_scroll_for_pos(x, y)
             self._tool_is_dragging = self._active_tool.on_drag_begin(
-                x, y, self._scale, self._scroll_x, self._scroll_y
+                x, y, self._scale, sx, sy
             )
 
     def _on_motion(self, controller, x, y):
         if self._active_tool:
-            self._active_tool.on_motion(x, y, self._scale, self._scroll_x, self._scroll_y)
+            sx, sy = self._tool_scroll_for_pos(x, y)
+            self._active_tool.on_motion(x, y, self._scale, sx, sy)
         if not self._is_pressed:
             return
         dx = x - self._press_pos[0]
@@ -258,12 +423,13 @@ class PdfCanvas(Gtk.DrawingArea):
             return
         self._has_moved = True
         if self._tool_is_dragging and self._active_tool:
+            sx, sy = self._tool_scroll_for_pos(x, y)
             self._active_tool.on_drag_update(
-                x, y, self._scale, self._scroll_x, self._scroll_y
+                x, y, self._scale, sx, sy
             )
         elif self._ctrl_held or self._active_tool is None:
-            self._scroll_x = self._drag_start_scroll[0] - dx
-            self._scroll_y = self._drag_start_scroll[1] - dy
+            self._scroll_x = self._drag_start_scroll[0] + dx
+            self._scroll_y = self._drag_start_scroll[1] + dy
             self.queue_draw()
 
     def _on_click_released(self, gesture, n_press, x, y):
@@ -273,13 +439,15 @@ class PdfCanvas(Gtk.DrawingArea):
         dy = y - self._press_pos[1]
         dist = (dx * dx + dy * dy) ** 0.5
         if dist < CLICK_THRESHOLD and self._active_tool:
+            sx, sy = self._tool_scroll_for_pos(x, y)
             self._active_tool.on_click(
                 self._press_pos[0], self._press_pos[1],
-                self._scale, self._scroll_x, self._scroll_y
+                self._scale, sx, sy
             )
         elif self._has_moved and self._tool_is_dragging and self._active_tool:
+            sx, sy = self._tool_scroll_for_pos(x, y)
             self._active_tool.on_drag_end(
-                x, y, self._scale, self._scroll_x, self._scroll_y
+                x, y, self._scale, sx, sy
             )
         self.grab_focus()
         self._is_pressed = False
@@ -296,7 +464,7 @@ class PdfCanvas(Gtk.DrawingArea):
         if state & Gdk.ModifierType.CONTROL_MASK:
             self._scale *= 1.1 if dy < 0 else 0.9
             self._scale = max(0.1, min(10.0, self._scale))
-            self._pixbuf = None
+            self._invalidate_cache()
             self.queue_draw()
         else:
             self._scroll_y -= dy
@@ -317,19 +485,19 @@ class PdfCanvas(Gtk.DrawingArea):
         if ctrl and keyval == Gdk.KEY_z:
             if self._document and self._document.is_loaded:
                 self._document.journal_undo()
-                self._pixbuf = None
+                self._invalidate_cache()
                 self.queue_draw()
             return True
         if ctrl and shift and keyval == Gdk.KEY_Z:
             if self._document and self._document.is_loaded:
                 self._document.journal_redo()
-                self._pixbuf = None
+                self._invalidate_cache()
                 self.queue_draw()
             return True
         if ctrl and keyval == Gdk.KEY_y:
             if self._document and self._document.is_loaded:
                 self._document.journal_redo()
-                self._pixbuf = None
+                self._invalidate_cache()
                 self.queue_draw()
             return True
         if keyval == Gdk.KEY_Escape and self._active_tool:
@@ -351,7 +519,7 @@ class PdfCanvas(Gtk.DrawingArea):
             finally:
                 self._document.stop_op()
             self._selected_item = None
-            self._pixbuf = None
+            self._invalidate_cache()
             self.queue_draw()
             return True
 
@@ -360,20 +528,30 @@ class PdfCanvas(Gtk.DrawingArea):
         if keyval == Gdk.KEY_plus or keyval == Gdk.KEY_equal:
             self._scale *= 1.2
             self._scale = min(10.0, self._scale)
-            self._pixbuf = None
+            self._invalidate_cache()
             self.queue_draw()
             return True
         elif keyval == Gdk.KEY_minus:
             self._scale *= 0.8
             self._scale = max(0.1, self._scale)
-            self._pixbuf = None
+            self._invalidate_cache()
             self.queue_draw()
             return True
         elif keyval == Gdk.KEY_Page_Down:
-            self.set_page(self._page_num + 1)
+            if self._continuous and self._page_offsets:
+                next_page = min(self._page_num + 1, len(self._page_offsets) - 1)
+                self._scroll_y = self._page_offsets[next_page][1]
+                self._invalidate_cache()
+            else:
+                self.set_page(self._page_num + 1)
             return True
         elif keyval == Gdk.KEY_Page_Up:
-            self.set_page(self._page_num - 1)
+            if self._continuous and self._page_offsets:
+                prev_page = max(self._page_num - 1, 0)
+                self._scroll_y = self._page_offsets[prev_page][1]
+                self._invalidate_cache()
+            else:
+                self.set_page(self._page_num - 1)
             return True
         elif keyval == Gdk.KEY_Home:
             self.set_page(0)

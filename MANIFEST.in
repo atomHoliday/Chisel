@@ -1,0 +1,2 @@
+include style.css
+recursive-include icons *.svg

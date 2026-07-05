@@ -2,6 +2,10 @@ import pymupdf
 from tools.base import Tool
 from tools.clipboard import get_clipboard
 from document.text_model import find_span_at
+from drawing.theme import (
+    SELECT_FILL, SELECT_BORDER, SELECT_WIDTH,
+    PASTE_FILL, PASTE_BORDER, PASTE_WIDTH,
+)
 
 
 class SelectTool(Tool):
@@ -302,11 +306,11 @@ class SelectTool(Tool):
                 ph = max(20, fs * 1.5 + 16) * scale
 
             cr.save()
-            cr.set_source_rgba(0.3, 0.6, 1.0, 0.35)
+            cr.set_source_rgba(*PASTE_FILL)
             cr.rectangle(x, y, pw, ph)
             cr.fill()
-            cr.set_source_rgba(0.3, 0.6, 1.0, 0.8)
-            cr.set_line_width(2)
+            cr.set_source_rgba(*PASTE_BORDER)
+            cr.set_line_width(PASTE_WIDTH)
             cr.rectangle(x, y, pw, ph)
             cr.stroke()
             cr.restore()
@@ -326,11 +330,11 @@ class SelectTool(Tool):
             w = (r.x1 - r.x0) * scale
             h = (r.y1 - r.y0) * scale
             cr.save()
-            cr.set_source_rgba(0.3, 0.6, 1.0, 0.25)
+            cr.set_source_rgba(*SELECT_FILL)
             cr.rectangle(x, y, w, h)
             cr.fill()
-            cr.set_source_rgba(0.3, 0.6, 1.0, 0.8)
-            cr.set_line_width(1.5)
+            cr.set_source_rgba(*SELECT_BORDER)
+            cr.set_line_width(SELECT_WIDTH)
             cr.rectangle(x, y, w, h)
             cr.stroke()
             cr.restore()
@@ -345,11 +349,11 @@ class SelectTool(Tool):
         h = (bbox[3] - bbox[1]) * scale
 
         cr.save()
-        cr.set_source_rgba(0.3, 0.6, 1.0, 0.25)
+        cr.set_source_rgba(*SELECT_FILL)
         cr.rectangle(x, y, w, h)
         cr.fill()
-        cr.set_source_rgba(0.3, 0.6, 1.0, 0.8)
-        cr.set_line_width(1.5)
+        cr.set_source_rgba(*SELECT_BORDER)
+        cr.set_line_width(SELECT_WIDTH)
         cr.rectangle(x, y, w, h)
         cr.stroke()
         cr.restore()

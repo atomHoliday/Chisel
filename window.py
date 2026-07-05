@@ -56,6 +56,7 @@ class PropertiesPanel(Gtk.Popover):
         self.set_position(Gtk.PositionType.BOTTOM)
 
         grid = Gtk.Grid()
+        grid.add_css_class("properties-panel")
         grid.set_row_spacing(6)
         grid.set_column_spacing(6)
         grid.set_margin_top(8)
@@ -69,6 +70,7 @@ class PropertiesPanel(Gtk.Popover):
         for name, rgb in [("Black", (0, 0, 0)), ("Red", (0.8, 0, 0)),
                           ("Blue", (0, 0, 0.8)), ("Green", (0, 0.6, 0))]:
             btn = Gtk.ToggleButton()
+            btn.add_css_class("flat")
             area = Gtk.DrawingArea()
             area.set_size_request(20, 20)
             area.set_draw_func(lambda a, cr, w, h, c=rgb: (
@@ -86,6 +88,7 @@ class PropertiesPanel(Gtk.Popover):
         width_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         for val in [1, 2, 4, 6]:
             btn = Gtk.ToggleButton(label=str(val))
+            btn.add_css_class("flat")
             btn.connect("toggled", self._on_width, val)
             if val == 2:
                 btn.set_active(True)
@@ -107,6 +110,7 @@ class PropertiesPanel(Gtk.Popover):
         shape_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         for name in ["rectangle", "circle"]:
             btn = Gtk.ToggleButton(label=name.capitalize())
+            btn.add_css_class("flat")
             btn.connect("toggled", self._on_shape, name)
             if name == "rectangle":
                 btn.set_active(True)
@@ -150,10 +154,10 @@ class PageThumbnailRow(Gtk.ListBoxRow):
         self.page_num = page_num
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        box.set_margin_top(4)
-        box.set_margin_bottom(4)
-        box.set_margin_start(4)
-        box.set_margin_end(4)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
 
         stream = GdkPixbuf.PixbufLoader.new_with_mime_type("image/png")
         stream.write(thumbnail_data)
@@ -180,12 +184,33 @@ class PageSidebar(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._pm = page_manager
         self._rows = []
+        self._thumb_zoom = 1.0
 
-        self.set_size_request(160, -1)
+        self.set_size_request(220, -1)
         self.set_vexpand(True)
 
+        zoom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        zoom_bar.set_margin_top(6)
+        zoom_bar.set_margin_bottom(6)
+        zoom_bar.set_halign(Gtk.Align.CENTER)
+
+        zoom_out = Gtk.Button.new_from_icon_name("zoom-out-symbolic")
+        zoom_out.set_tooltip_text("Smaller thumbnails")
+        zoom_out.connect("clicked", self._on_thumb_zoom_out)
+
+        self._thumb_zoom_label = Gtk.Label(label="100%")
+
+        zoom_in = Gtk.Button.new_from_icon_name("zoom-in-symbolic")
+        zoom_in.set_tooltip_text("Larger thumbnails")
+        zoom_in.connect("clicked", self._on_thumb_zoom_in)
+
+        zoom_bar.append(zoom_out)
+        zoom_bar.append(self._thumb_zoom_label)
+        zoom_bar.append(zoom_in)
+        self.append(zoom_bar)
+
         scrolled = Gtk.ScrolledWindow()
-        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)
 
         self._listbox = Gtk.ListBox()
@@ -196,6 +221,8 @@ class PageSidebar(Gtk.Box):
 
         self.append(scrolled)
         self._setup_context_menu()
+
+        self.connect("notify::default-width", lambda w, p: self.rebuild())
 
     def _setup_context_menu(self):
         click = Gtk.GestureClick.new()
@@ -264,14 +291,27 @@ class PageSidebar(Gtk.Box):
         doc = self._pm._doc
         if not doc._doc:
             return
+        alloc = self.get_allocation()
+        base = max(120, alloc.width - 24) if alloc.width > 0 else 120
+        thumb_size = int(base * self._thumb_zoom)
         for i in range(doc.page_count):
-            result = self._pm.render_thumbnail(i)
+            result = self._pm.render_thumbnail(i, max_size=thumb_size)
             if result is None:
                 continue
             png_data, w, h, label = result
             row = PageThumbnailRow(i, png_data, w, h, str(label))
             self._listbox.append(row)
             self._rows.append(row)
+
+    def _on_thumb_zoom_in(self, btn):
+        self._thumb_zoom = min(3.0, self._thumb_zoom + 0.25)
+        self._thumb_zoom_label.set_text(f"{int(self._thumb_zoom * 100)}%")
+        self.rebuild()
+
+    def _on_thumb_zoom_out(self, btn):
+        self._thumb_zoom = max(0.5, self._thumb_zoom - 0.25)
+        self._thumb_zoom_label.set_text(f"{int(self._thumb_zoom * 100)}%")
+        self.rebuild()
 
     def select_page(self, page_num):
         if 0 <= page_num < len(self._rows):
@@ -281,6 +321,9 @@ class PageSidebar(Gtk.Box):
 class ChiselWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        import os
+        icon_dir = os.path.join(os.path.dirname(__file__), "icons")
 
         self._document = PdfDocument()
         self._canvas = PdfCanvas()
@@ -340,19 +383,20 @@ class ChiselWindow(Adw.ApplicationWindow):
         headerbar.pack_start(self._sidebar_button)
 
         tool_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        tool_box.add_css_class("chisel-toolbox")
         self._tool_buttons = []
 
         tools_config = [
-            ("pan", "Pan", "Pan (default)", "selection-mode-symbolic"),
-            ("select", "Sel", "Select text", "edit-select-symbolic"),
-            ("text_edit", "Text", "Edit text", "insert-text-symbolic"),
-            ("fraction", "Frac", "Fraction editor", None),
-            ("image", "Img", "Insert image", "insert-image-symbolic"),
-            ("highlight", "High", "Highlight", "text-highlight-symbolic"),
-            ("line", "Line", "Line / Arrow", None),
-            ("shape", "Shape", "Rectangle / Circle", "insert-object-symbolic"),
-            ("callout", "Call", "Callout", "annotations-text-symbolic"),
-            ("cut", "Cut", "Cut (redact)", "edit-cut-symbolic"),
+            ("pan", "Pan", "Pan (default)", f"{icon_dir}/chisel-pan.svg"),
+            ("select", "Sel", "Select text", f"{icon_dir}/chisel-select.svg"),
+            ("text_edit", "Text", "Edit text", f"{icon_dir}/chisel-text.svg"),
+            ("fraction", "Frac", "Fraction editor", f"{icon_dir}/chisel-fraction.svg"),
+            ("image", "Img", "Insert image", f"{icon_dir}/chisel-image.svg"),
+            ("highlight", "High", "Highlight", f"{icon_dir}/chisel-highlight.svg"),
+            ("line", "Line", "Line / Arrow", f"{icon_dir}/chisel-line.svg"),
+            ("shape", "Shape", "Rectangle / Circle", f"{icon_dir}/chisel-shape.svg"),
+            ("callout", "Call", "Callout", f"{icon_dir}/chisel-callout.svg"),
+            ("cut", "Cut", "Cut (redact)", f"{icon_dir}/chisel-cut.svg"),
         ]
 
         group = None
@@ -360,7 +404,12 @@ class ChiselWindow(Adw.ApplicationWindow):
             btn = Gtk.ToggleButton()
             btn.set_tooltip_text(tip)
             if icon_name:
-                btn.set_child(Gtk.Image.new_from_icon_name(icon_name))
+                if icon_name.startswith("/") or "svg" in icon_name:
+                    img = Gtk.Image.new_from_file(icon_name)
+                    img.set_pixel_size(20)
+                    btn.set_child(img)
+                else:
+                    btn.set_child(Gtk.Image.new_from_icon_name(icon_name))
             else:
                 btn.set_label(label)
             if group is not None:
@@ -400,12 +449,21 @@ class ChiselWindow(Adw.ApplicationWindow):
         headerbar.set_title_widget(zoom_box)
 
         nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        nav_box.add_css_class("chisel-navbox")
         prev = Gtk.Button.new_from_icon_name("go-previous-symbolic")
         prev.connect("clicked", lambda b: self._go_page(-1))
         nav_box.append(prev)
 
         self._page_label = Gtk.Label(label="0 / 0")
         nav_box.append(self._page_label)
+
+        self._continuous_btn = Gtk.ToggleButton()
+        self._continuous_btn.set_child(
+            Gtk.Image.new_from_icon_name("view-continuous-symbolic")
+        )
+        self._continuous_btn.set_tooltip_text("Continuous scroll mode")
+        self._continuous_btn.connect("toggled", self._on_continuous_toggled)
+        nav_box.append(self._continuous_btn)
 
         next = Gtk.Button.new_from_icon_name("go-next-symbolic")
         next.connect("clicked", lambda b: self._go_page(1))
@@ -429,6 +487,23 @@ class ChiselWindow(Adw.ApplicationWindow):
         self.set_content(box)
         self._setup_actions()
         self._sidebar_visible = True
+        self._load_css()
+
+    def _load_css(self):
+        import os
+        css_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "style.css")
+        if not os.path.exists(css_path):
+            return
+        provider = Gtk.CssProvider()
+        provider.load_from_path(css_path)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    def _on_continuous_toggled(self, button):
+        self._canvas.toggle_continuous()
 
     def _setup_tools(self):
         self._tools = {

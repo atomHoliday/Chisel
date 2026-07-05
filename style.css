@@ -1,0 +1,69 @@
+.chisel-toolbox button {
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 0 1px;
+    min-width: 36px;
+    min-height: 32px;
+    transition: background 150ms ease;
+}
+
+.chisel-toolbox button:checked {
+    background: alpha(@accent_bg_color, 0.25);
+    color: @accent_fg_color;
+    box-shadow: inset 0 -2px 0 0 @accent_color;
+}
+
+.chisel-toolbox button:not(:checked):hover {
+    background: alpha(@shade_color, 0.05);
+}
+
+.chisel-toolbox button:focus-visible {
+    outline: 2px solid alpha(@accent_color, 0.5);
+    outline-offset: 2px;
+}
+
+.chisel-navbox button {
+    border-radius: 6px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 2px;
+    transition: background 150ms ease;
+}
+
+.chisel-navbox button:hover {
+    background: alpha(@shade_color, 0.08);
+}
+
+.chisel-navbox button:focus-visible {
+    outline: 2px solid alpha(@accent_color, 0.5);
+    outline-offset: 2px;
+}
+
+.properties-panel label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: alpha(@window_fg_color, 0.8);
+}
+
+.properties-panel button.flat {
+    border-radius: 4px;
+    min-width: 28px;
+    min-height: 28px;
+    transition: background 150ms ease;
+}
+
+.properties-panel button.flat:checked {
+    background: alpha(@accent_bg_color, 0.2);
+    outline: 1px solid alpha(@accent_color, 0.5);
+    outline-offset: -1px;
+}
+
+.properties-panel button.flat:focus-visible {
+    outline: 2px solid alpha(@accent_color, 0.5);
+    outline-offset: 2px;
+}
+
+.properties-panel entry {
+    border-radius: 4px;
+    padding: 4px 6px;
+}

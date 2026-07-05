@@ -1,8 +1,13 @@
 import sys
-from gi.repository import Gtk, Gdk, Gio, Adw
+from gi.repository import Gtk, Gdk, Adw
 
 from tools.base import Tool
 from document.fraction_detector import detect_fractions, find_fraction_at
+from drawing.theme import (
+    FRACTION_SELECTED_FILL, FRACTION_SELECTED_BORDER,
+    FRACTION_UNSELECTED_FILL, FRACTION_UNSELECTED_BORDER,
+    FRACTION_LABEL_COLOR, FRACTION_WIDTH,
+)
 
 _BUILTIN_FONTS = {
     "helv", "helvetica", "tiro", "times", "cour", "courier",
@@ -299,24 +304,24 @@ class FractionEditTool(Tool):
             )
 
             if is_selected:
-                cr.set_source_rgba(0.2, 0.8, 0.2, 0.25)
+                cr.set_source_rgba(*FRACTION_SELECTED_FILL)
             else:
-                cr.set_source_rgba(0.9, 0.6, 0.0, 0.2)
+                cr.set_source_rgba(*FRACTION_UNSELECTED_FILL)
 
             cr.rectangle(x, y, w, h)
             cr.fill()
 
             if is_selected:
-                cr.set_source_rgba(0.2, 0.8, 0.2, 0.9)
+                cr.set_source_rgba(*FRACTION_SELECTED_BORDER)
             else:
-                cr.set_source_rgba(0.9, 0.6, 0.0, 0.7)
+                cr.set_source_rgba(*FRACTION_UNSELECTED_BORDER)
 
-            cr.set_line_width(1.5)
+            cr.set_line_width(FRACTION_WIDTH)
             cr.rectangle(x, y, w, h)
             cr.stroke()
 
             label = f"{frac.numerator_text}/{frac.denominator_text}"
             cr.set_font_size(10)
-            cr.set_source_rgb(0.9, 0.6, 0.0)
+            cr.set_source_rgb(*FRACTION_LABEL_COLOR)
             cr.move_to(x + 2, y - 4)
             cr.show_text(label)

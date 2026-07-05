@@ -15,6 +15,9 @@ class ChiselApplication(Adw.Application):
         )
 
     def do_activate(self):
+        Adw.StyleManager.get_default().set_color_scheme(
+            Adw.ColorScheme.DEFAULT
+        )
         win = self.get_active_window()
         if not win:
             win = ChiselWindow(application=self)

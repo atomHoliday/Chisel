@@ -1,4 +1,5 @@
 from tools.base import Tool
+from drawing.theme import HIGHLIGHT_FILL, HIGHLIGHT_BORDER, HIGHLIGHT_WIDTH
 
 
 class HighlightTool(Tool):
@@ -66,11 +67,11 @@ class HighlightTool(Tool):
             w = abs(ex - sx) * scale
             h = abs(ey - sy) * scale
             cr.save()
-            cr.set_source_rgba(1, 1, 0, 0.3)
+            cr.set_source_rgba(*HIGHLIGHT_FILL)
             cr.rectangle(x, y, w, h)
             cr.fill()
-            cr.set_source_rgba(1, 0.8, 0, 0.8)
-            cr.set_line_width(1.5)
+            cr.set_source_rgba(*HIGHLIGHT_BORDER)
+            cr.set_line_width(HIGHLIGHT_WIDTH)
             cr.rectangle(x, y, w, h)
             cr.stroke()
             cr.restore()
