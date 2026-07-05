@@ -1,6 +1,5 @@
 import pymupdf
 from tools.base import Tool
-from tools.fraction_edit_tool import _builtin_font
 from drawing.overlay import draw_preview_callout, _compute_box, _edge_point
 
 
@@ -59,40 +58,28 @@ class CalloutTool(Tool):
             box_w = max(80, len(text) * font_size * 0.65 + padding * 2)
             box_h = max(50, font_size * 1.5 + padding * 2)
             bx0, by0, bx1, by1 = _compute_box(ox, oy, cx, cy, box_w, box_h)
+            ex, ey = _edge_point(bx0, by0, bx1, by1, ox, oy)
 
-            # Oval annotation for the outline
-            oval = page.add_circle_annot((bx0, by0, bx1, by1))
-            oval.set_colors(stroke=color)
-            oval.set_border(width=width)
-            oval.update()
-
-            # Text rendered directly on page content
-            if text:
-                bcx = (bx0 + bx1) / 2
-                bcy = (by0 + by1) / 2
-                text_w = len(text) * font_size * 0.33
-                fontname = _builtin_font("Helvetica")
-                page.insert_text(
-                    (bcx - text_w / 2, bcy + font_size * 0.35),
+            doc._doc.journal_start_op("add callout")
+            try:
+                page.add_freetext_annot(
+                    pymupdf.Rect(bx0, by0, bx1, by1),
                     text,
                     fontsize=font_size,
-                    fontname=fontname,
-                    color=color,
+                    text_color=color,
+                    fill_color=None,
+                    border_width=width,
+                    callout=((ox, oy), (ex, ey)),
+                    line_end=pymupdf.PDF_ANNOT_LE_OPEN_ARROW,
+                    align=pymupdf.TEXT_ALIGN_CENTER,
                 )
 
-            # Leader line from oval edge to origin, arrow at origin
-            ex, ey = _edge_point(bx0, by0, bx1, by1, ox, oy)
-            line_annot = page.add_line_annot((ex, ey), (ox, oy))
-            line_annot.set_colors(stroke=color)
-            line_annot.set_border(width=width)
-            line_annot.set_line_ends(pymupdf.PDF_ANNOT_LE_NONE, pymupdf.PDF_ANNOT_LE_OPEN_ARROW)
-            line_annot.update()
-
-            # Small filled circle at origin
-            dot = page.add_circle_annot((ox - 2, oy - 2, ox + 2, oy + 2))
-            dot.set_colors(fill=color)
-            dot.set_border(width=0)
-            dot.update()
+                dot = page.add_circle_annot((ox - 2, oy - 2, ox + 2, oy + 2))
+                dot.set_colors(fill=color)
+                dot.set_border(width=0)
+                dot.update()
+            finally:
+                doc._doc.journal_stop_op()
 
             self._canvas._pixbuf = None
             self._canvas.queue_draw()

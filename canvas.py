@@ -4,9 +4,42 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf
 from gi.repository import cairo
+from gi.repository import GLib
 
 
 CLICK_THRESHOLD = 8
+
+_SHORTCUTS = [
+    ("Ctrl+O", "Open PDF"),
+    ("Ctrl+S", "Save"),
+    ("Ctrl+Shift+S", "Save As"),
+    ("Ctrl+Z", "Undo"),
+    ("Ctrl+Shift+Z", "Redo"),
+    ("Ctrl+C", "Copy selected text/annot"),
+    ("Ctrl+V", "Paste"),
+    ("Delete", "Delete selected"),
+    ("Escape", "Clear selection / Cancel"),
+    ("+ / -", "Zoom in / out"),
+    ("Ctrl++ / Ctrl+-", "Zoom in / out"),
+    ("Ctrl+0", "Zoom to fit"),
+    ("Ctrl+scroll", "Zoom"),
+    ("Ctrl+drag", "Pan view"),
+    ("Page Up / Down", "Navigate pages"),
+    ("Home / End", "First / Last page"),
+]
+
+_TOOLS = [
+    ("Pan", "Default mode. Click+drag to pan."),
+    ("Select", "Click to select text or annotations."),
+    ("Text Edit", "Click text to edit in place."),
+    ("Frac", "Fraction editor — detect and edit fractions."),
+    ("Image", "Insert images. Click = file picker, drag = size."),
+    ("Highlight", "Drag to highlight region."),
+    ("Line", "Drag to draw line or arrow."),
+    ("Shape", "Drag to draw rectangle or circle."),
+    ("Callout", "Drag from point to create callout box."),
+    ("Cut", "Drag to redact (permanently remove) content."),
+]
 
 
 class PdfCanvas(Gtk.DrawingArea):
@@ -100,16 +133,82 @@ class PdfCanvas(Gtk.DrawingArea):
         self._pixbuf = stream.get_pixbuf()
         return self._pixbuf
 
+    def _draw_welcome(self, cr, w, h):
+        cx = w / 2
+        top = 40
+
+        cr.set_source_rgb(0.2, 0.2, 0.2)
+        cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
+        cr.set_font_size(24)
+        label = "Chisel"
+        te = cr.text_extents(label)
+        cr.move_to(cx - te.width / 2, top + te.height)
+        cr.show_text(label)
+
+        cr.set_source_rgb(0.4, 0.4, 0.4)
+        cr.select_font_face("Sans", cairo.FontSlant.ITALIC, cairo.FontWeight.NORMAL)
+        cr.set_font_size(12)
+        label = "The interactive PDF editor"
+        te = cr.text_extents(label)
+        cr.move_to(cx - te.width / 2, top + 24 + te.height)
+        cr.show_text(label)
+
+        left_x = 40
+        right_x = cx + 20
+        section_top = top + 70
+        col_w = cx - 60
+
+        cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
+
+        cr.set_source_rgb(0.2, 0.2, 0.2)
+        cr.set_font_size(13)
+        label = "Keyboard Shortcuts"
+        cr.move_to(left_x, section_top)
+        cr.show_text(label)
+
+        label = "Tools"
+        cr.move_to(right_x, section_top)
+        cr.show_text(label)
+
+        cr.set_source_rgb(0.35, 0.35, 0.35)
+        cr.set_font_size(10)
+
+        row_h = 18
+        for i, (key, desc) in enumerate(_SHORTCUTS):
+            y = section_top + 20 + i * row_h
+            cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
+            cr.set_source_rgb(0.25, 0.25, 0.25)
+            cr.move_to(left_x + 10, y + 10)
+            cr.show_text(key)
+            cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
+            cr.set_source_rgb(0.45, 0.45, 0.45)
+            cr.move_to(left_x + 130, y + 10)
+            cr.show_text(desc)
+
+        for i, (name, desc) in enumerate(_TOOLS):
+            y = section_top + 20 + i * row_h
+            cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
+            cr.set_source_rgb(0.25, 0.25, 0.25)
+            cr.move_to(right_x + 10, y + 10)
+            cr.show_text(name)
+            cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
+            cr.set_source_rgb(0.45, 0.45, 0.45)
+            cr.move_to(right_x + 65, y + 10)
+            cr.show_text(desc)
+
+        cr.set_source_rgb(0.55, 0.55, 0.55)
+        cr.set_font_size(11)
+        label = "Open a PDF to get started  (Ctrl+O)"
+        te = cr.text_extents(label)
+        cr.move_to(cx - te.width / 2, h - 30)
+        cr.show_text(label)
+
     def _on_draw(self, area, cr, w, h):
         cr.set_source_rgb(0.85, 0.85, 0.85)
         cr.paint()
 
         if not self._document or not self._document.is_loaded:
-            cr.set_source_rgb(0.6, 0.6, 0.6)
-            cr.select_font_face("Sans", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
-            cr.set_font_size(18)
-            cr.move_to(w / 2 - 80, h / 2)
-            cr.show_text("No PDF loaded")
+            self._draw_welcome(cr, w, h)
             return
 
         pixbuf = self._get_pixbuf()
@@ -149,6 +248,8 @@ class PdfCanvas(Gtk.DrawingArea):
             )
 
     def _on_motion(self, controller, x, y):
+        if self._active_tool:
+            self._active_tool.on_motion(x, y, self._scale, self._scroll_x, self._scroll_y)
         if not self._is_pressed:
             return
         dx = x - self._press_pos[0]
@@ -204,6 +305,7 @@ class PdfCanvas(Gtk.DrawingArea):
 
     def _on_key_pressed(self, controller, keyval, keycode, state):
         ctrl = state & Gdk.ModifierType.CONTROL_MASK
+        shift = state & Gdk.ModifierType.SHIFT_MASK
         if ctrl and keyval == Gdk.KEY_c:
             if self._active_tool:
                 self._active_tool.on_copy()
@@ -212,16 +314,42 @@ class PdfCanvas(Gtk.DrawingArea):
             if self._active_tool:
                 self._active_tool.on_paste()
             return True
+        if ctrl and keyval == Gdk.KEY_z:
+            if self._document and self._document.is_loaded:
+                self._document.journal_undo()
+                self._pixbuf = None
+                self.queue_draw()
+            return True
+        if ctrl and shift and keyval == Gdk.KEY_Z:
+            if self._document and self._document.is_loaded:
+                self._document.journal_redo()
+                self._pixbuf = None
+                self.queue_draw()
+            return True
+        if ctrl and keyval == Gdk.KEY_y:
+            if self._document and self._document.is_loaded:
+                self._document.journal_redo()
+                self._pixbuf = None
+                self.queue_draw()
+            return True
+        if keyval == Gdk.KEY_Escape and self._active_tool:
+            if self._active_tool.on_escape():
+                self.queue_draw()
+            return True
         if keyval in (Gdk.KEY_Delete, Gdk.KEY_BackSpace) and self._selected_item:
-            page = self._document._doc[self._page_num]
-            if self._selected_item["type"] == "annot":
-                page.delete_annot(self._selected_item["annot"])
-            elif self._selected_item["type"] == "text":
-                span = self._selected_item["span"]
-                annot = page.add_redact_annot(span.bbox)
-                annot.set_colors(fill=(1, 1, 1))
-                page.apply_redactions()
-                page.clean_contents()
+            self._document.start_op("delete selected")
+            try:
+                page = self._document._doc[self._page_num]
+                if self._selected_item["type"] == "annot":
+                    page.delete_annot(self._selected_item["annot"])
+                elif self._selected_item["type"] == "text":
+                    span = self._selected_item["span"]
+                    annot = page.add_redact_annot(span.bbox)
+                    annot.set_colors(fill=(1, 1, 1))
+                    page.apply_redactions()
+                    page.clean_contents()
+            finally:
+                self._document.stop_op()
             self._selected_item = None
             self._pixbuf = None
             self.queue_draw()

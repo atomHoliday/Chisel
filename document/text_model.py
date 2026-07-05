@@ -2,13 +2,14 @@ import pymupdf
 
 
 class TextSpan:
-    def __init__(self, page_num, bbox, text, font_size, font_name, origin):
+    def __init__(self, page_num, bbox, text, font_size, font_name, origin, color=0):
         self.page_num = page_num
         self.bbox = bbox
         self.text = text
         self.font_size = font_size
         self.font_name = font_name
         self.origin = origin
+        self.color = color
 
     def __repr__(self):
         return f"TextSpan({self.text!r}, bbox={self.bbox})"
@@ -33,6 +34,7 @@ def get_page_spans(doc, page_num):
                     font_size=span["size"],
                     font_name=span["font"],
                     origin=span["origin"],
+                    color=span["color"],
                 ))
     return spans
 
@@ -68,5 +70,6 @@ def get_page_chars(doc, page_num):
                         font_size=font_size,
                         font_name=font_name,
                         origin=(b[0], b[3]),
+                        color=span.get("color", 0),
                     ))
     return chars

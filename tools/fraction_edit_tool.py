@@ -202,65 +202,69 @@ class FractionEditTool(Tool):
                         "fill_opacity": d.get("fill_opacity", 1),
                     })
             print(f"[FRAC] captured {len(captured)} drawings to re-draw", file=sys.stderr)
-            page.add_redact_annot(frac.bbox).set_colors(fill=(1, 1, 1))
-            page.apply_redactions()
-            page.clean_contents()
+            doc._doc.journal_start_op("edit fraction")
+            try:
+                page.add_redact_annot(frac.bbox).set_colors(fill=(1, 1, 1))
+                page.apply_redactions()
+                page.clean_contents()
 
-            font_size = frac.font_size or 14
-            font_name = _builtin_font(frac.font_name or "helv")
-            offset = font_size * 0.15
+                font_size = frac.font_size or 14
+                font_name = _builtin_font(frac.font_name or "helv")
+                offset = font_size * 0.15
 
-            if new_num:
-                nb = frac.num_bbox or frac.bbox
-                num_pos = frac.num_origin or (nb[0], nb[3])
-                num_pos = (num_pos[0], num_pos[1] - offset)
-                page.insert_text(
-                    (num_pos[0], num_pos[1]),
-                    new_num,
-                    fontsize=font_size,
-                    fontname=font_name,
-                    color=(0, 0, 0),
-                )
-            if new_den:
-                db = frac.den_bbox or frac.bbox
-                den_pos = frac.den_origin or (db[0], db[3])
-                den_pos = (den_pos[0], den_pos[1] + offset)
-                page.insert_text(
-                    (den_pos[0], den_pos[1]),
-                    new_den,
-                    fontsize=font_size,
-                    fontname=font_name,
-                    color=(0, 0, 0),
-                )
+                if new_num:
+                    nb = frac.num_bbox or frac.bbox
+                    num_pos = frac.num_origin or (nb[0], nb[3])
+                    num_pos = (num_pos[0], num_pos[1] - offset)
+                    page.insert_text(
+                        (num_pos[0], num_pos[1]),
+                        new_num,
+                        fontsize=font_size,
+                        fontname=font_name,
+                        color=(0, 0, 0),
+                    )
+                if new_den:
+                    db = frac.den_bbox or frac.bbox
+                    den_pos = frac.den_origin or (db[0], db[3])
+                    den_pos = (den_pos[0], den_pos[1] + offset)
+                    page.insert_text(
+                        (den_pos[0], den_pos[1]),
+                        new_den,
+                        fontsize=font_size,
+                        fontname=font_name,
+                        color=(0, 0, 0),
+                    )
 
-            # Re-draw captured vector lines (so they aren't erased by redaction)
-            for cap in captured:
-                shape = page.new_shape()
-                for item in cap["items"]:
-                    cmd = item[0]
-                    if cmd == "l":
-                        shape.draw_line(item[1], item[2])
-                    elif cmd == "re":
-                        shape.draw_rect(item[1])
-                    elif cmd == "qu":
-                        shape.draw_quad(item[1])
-                    elif cmd == "cur":
-                        shape.draw_bezier(item[1], item[2], item[3], item[4])
-                kw = dict(
-                    width=cap["width"],
-                    color=cap["color"],
-                    fill=cap["fill"],
-                    closePath=cap["closePath"],
-                    dashes=cap["dashes"],
-                    lineCap=cap["lineCap"],
-                    lineJoin=cap["lineJoin"],
-                )
-                if cap["stroke_opacity"] is not None:
-                    kw["stroke_opacity"] = cap["stroke_opacity"]
-                if cap["fill_opacity"] is not None:
-                    kw["fill_opacity"] = cap["fill_opacity"]
-                shape.finish(**kw)
-                shape.commit()
+                # Re-draw captured vector lines (so they aren't erased by redaction)
+                for cap in captured:
+                    shape = page.new_shape()
+                    for item in cap["items"]:
+                        cmd = item[0]
+                        if cmd == "l":
+                            shape.draw_line(item[1], item[2])
+                        elif cmd == "re":
+                            shape.draw_rect(item[1])
+                        elif cmd == "qu":
+                            shape.draw_quad(item[1])
+                        elif cmd == "cur":
+                            shape.draw_bezier(item[1], item[2], item[3], item[4])
+                    kw = dict(
+                        width=cap["width"],
+                        color=cap["color"],
+                        fill=cap["fill"],
+                        closePath=cap["closePath"],
+                        dashes=cap["dashes"],
+                        lineCap=cap["lineCap"],
+                        lineJoin=cap["lineJoin"],
+                    )
+                    if cap["stroke_opacity"] is not None:
+                        kw["stroke_opacity"] = cap["stroke_opacity"]
+                    if cap["fill_opacity"] is not None:
+                        kw["fill_opacity"] = cap["fill_opacity"]
+                    shape.finish(**kw)
+                    shape.commit()
+            finally:
+                doc._doc.journal_stop_op()
 
             if self._toast_overlay:
                 self._toast_overlay.add_toast(Adw.Toast.new("Fraction updated"))

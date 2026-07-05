@@ -50,15 +50,19 @@ class LineTool(Tool):
                 width = self._props.get("stroke_width", 1)
                 is_arrow = self._props.get("has_arrow", False)
 
-                annot = page.add_line_annot((sx, sy), (ex, ey))
-                annot.set_colors(stroke=color)
-                annot.set_border(width=width)
-                if is_arrow:
-                    annot.set_line_ends(
-                        pymupdf.PDF_ANNOT_LE_OPEN_ARROW,
-                        pymupdf.PDF_ANNOT_LE_NONE,
-                    )
-                annot.update()
+                doc._doc.journal_start_op("add line")
+                try:
+                    annot = page.add_line_annot((sx, sy), (ex, ey))
+                    annot.set_colors(stroke=color)
+                    annot.set_border(width=width)
+                    if is_arrow:
+                        annot.set_line_ends(
+                            pymupdf.PDF_ANNOT_LE_OPEN_ARROW,
+                            pymupdf.PDF_ANNOT_LE_NONE,
+                        )
+                    annot.update()
+                finally:
+                    doc._doc.journal_stop_op()
 
                 self._canvas._pixbuf = None
                 self._canvas.queue_draw()

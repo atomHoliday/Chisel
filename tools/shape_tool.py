@@ -52,16 +52,20 @@ class ShapeTool(Tool):
                 shape_type = self._props.get("shape_type", "rectangle")
                 rect = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
 
-                if shape_type == "circle":
-                    annot = page.add_circle_annot(rect)
-                else:
-                    annot = page.add_rect_annot(rect)
+                doc._doc.journal_start_op("add shape")
+                try:
+                    if shape_type == "circle":
+                        annot = page.add_circle_annot(rect)
+                    else:
+                        annot = page.add_rect_annot(rect)
 
-                annot.set_colors(stroke=color, fill=fill)
-                annot.set_border(width=width)
-                annot.update()
-                if fill:
-                    annot.set_opacity(0.3)
+                    annot.set_colors(stroke=color, fill=fill)
+                    annot.set_border(width=width)
+                    annot.update()
+                    if fill:
+                        annot.set_opacity(0.3)
+                finally:
+                    doc._doc.journal_stop_op()
 
                 self._canvas._pixbuf = None
                 self._canvas.queue_draw()

@@ -45,7 +45,11 @@ class HighlightTool(Tool):
             if doc and doc._doc:
                 page = doc._doc[self._canvas.page_num]
                 rect = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
-                page.add_highlight_annot(rect)
+                doc._doc.journal_start_op("add highlight")
+                try:
+                    page.add_highlight_annot(rect)
+                finally:
+                    doc._doc.journal_stop_op()
                 self._canvas._pixbuf = None
                 self._canvas.queue_draw()
         self._drag_start = None

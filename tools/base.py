@@ -23,6 +23,9 @@ class Tool:
     def on_drag_end(self, x, y, scale, scroll_x, scroll_y):
         return False
 
+    def on_motion(self, x, y, scale, scroll_x, scroll_y):
+        return False
+
     def on_paste(self):
         return False
 
@@ -30,6 +33,9 @@ class Tool:
         return False
 
     def on_delete(self):
+        return False
+
+    def on_escape(self):
         return False
 
     def draw_overlay(self, cr, width, height, scale, scroll_x, scroll_y):

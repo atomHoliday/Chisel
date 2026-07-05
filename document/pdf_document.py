@@ -22,6 +22,21 @@ class PdfDocument:
         self.close()
         self._doc = pymupdf.open(path)
         self._path = path
+        self._preload_fonts()
+        self._doc.journal_enable()
+
+    def _preload_fonts(self):
+        if not self._doc or self._doc.page_count == 0:
+            return
+        page = self._doc[0]
+        for fname in ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique",
+                      "Times-Roman", "Times-Bold", "Times-Italic",
+                      "Courier", "Courier-Bold", "Courier-Oblique"]:
+            try:
+                page.insert_text((-100, -100), ".", fontname=fname, fontsize=1)
+            except Exception:
+                pass
+        page.clean_contents()
 
     def close(self) -> None:
         if self._doc:
@@ -56,3 +71,19 @@ class PdfDocument:
         if self._doc is None:
             return
         self._doc.save(path, deflate=True)
+
+    def start_op(self, name):
+        if self._doc:
+            self._doc.journal_start_op(name)
+
+    def stop_op(self):
+        if self._doc:
+            self._doc.journal_stop_op()
+
+    def journal_undo(self):
+        if self._doc and self._doc.journal_can_do().get("undo"):
+            self._doc.journal_undo()
+
+    def journal_redo(self):
+        if self._doc and self._doc.journal_can_do().get("redo"):
+            self._doc.journal_redo()

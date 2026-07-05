@@ -136,27 +136,32 @@ class TextEditTool(Tool):
         print(f"[TEXT_TOOL] _apply_edit: page_num={self._page_num}, bbox={span.bbox}, origin={span.origin}", file=sys.stderr)
         try:
             page = doc._doc[self._page_num]
-            print("[TEXT_TOOL] adding redact annotation", file=sys.stderr)
-            annot = page.add_redact_annot(span.bbox)
-            print("[TEXT_TOOL] setting fill to white", file=sys.stderr)
-            annot.set_colors(fill=(1, 1, 1))
-            print("[TEXT_TOOL] applying redactions", file=sys.stderr)
-            page.apply_redactions()
-            print("[TEXT_TOOL] cleaning page contents", file=sys.stderr)
-            page.clean_contents()
-            if new_text:
-                font_name = _builtin_font(span.font_name)
-                print(f"[TEXT_TOOL] font mapping: {span.font_name!r} -> {font_name!r}", file=sys.stderr)
-                print(f"[TEXT_TOOL] insert_text: pos={span.origin}, text={new_text!r}, fontsize={span.font_size}, fontname={font_name!r}, color=(0,0,0)", file=sys.stderr)
-                page.insert_text(
-                    (span.origin[0], span.origin[1]),
-                    new_text,
-                    fontsize=span.font_size,
-                    fontname=font_name,
-                    color=(0, 0, 0),
-                )
-            else:
-                print("[TEXT_TOOL] new_text is empty, skipping insert_text", file=sys.stderr)
+            print("[TEXT_TOOL] start journal op", file=sys.stderr)
+            doc._doc.journal_start_op("edit text")
+            try:
+                print("[TEXT_TOOL] adding redact annotation", file=sys.stderr)
+                annot = page.add_redact_annot(span.bbox)
+                print("[TEXT_TOOL] setting fill to white", file=sys.stderr)
+                annot.set_colors(fill=(1, 1, 1))
+                print("[TEXT_TOOL] applying redactions", file=sys.stderr)
+                page.apply_redactions()
+                print("[TEXT_TOOL] cleaning page contents", file=sys.stderr)
+                page.clean_contents()
+                if new_text:
+                    font_name = _builtin_font(span.font_name)
+                    print(f"[TEXT_TOOL] font mapping: {span.font_name!r} -> {font_name!r}", file=sys.stderr)
+                    print(f"[TEXT_TOOL] insert_text: pos={span.origin}, text={new_text!r}, fontsize={span.font_size}, fontname={font_name!r}, color=(0,0,0)", file=sys.stderr)
+                    page.insert_text(
+                        (span.origin[0], span.origin[1]),
+                        new_text,
+                        fontsize=span.font_size,
+                        fontname=font_name,
+                        color=(0, 0, 0),
+                    )
+                else:
+                    print("[TEXT_TOOL] new_text is empty, skipping insert_text", file=sys.stderr)
+            finally:
+                doc._doc.journal_stop_op()
             self._toast("Text updated")
         except Exception as e:
             print(f"[TEXT_TOOL] ERROR in _apply_edit: {e}", file=sys.stderr)
