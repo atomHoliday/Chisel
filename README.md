@@ -19,7 +19,7 @@ sudo dnf install python3-gobject gtk4 libadwaita
 ### Install Chisel
 
 ```bash
-pip install git+https://github.com/youruser/chisel.git
+pip install git+https://github.com/atomHoliday/Chisel.git
 ```
 
 ### Run
@@ -28,7 +28,7 @@ pip install git+https://github.com/youruser/chisel.git
 chisel
 
 # or directly from a checkout
-git clone https://github.com/youruser/chisel.git
+git clone https://github.com/atomHoliday/Chisel.git
 cd chisel
 python main.py
 ```
