@@ -28,15 +28,15 @@ class PdfDocument:
     def _preload_fonts(self):
         if not self._doc or self._doc.page_count == 0:
             return
-        page = self._doc[0]
-        for fname in ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique",
-                      "Times-Roman", "Times-Bold", "Times-Italic",
-                      "Courier", "Courier-Bold", "Courier-Oblique"]:
-            try:
-                page.insert_text((-100, -100), ".", fontname=fname, fontsize=1)
-            except Exception:
-                pass
-        page.clean_contents()
+        for page in list(self._doc):
+            for fname in ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+                          "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+                          "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"]:
+                try:
+                    page.insert_text((-100, -100), ".", fontname=fname, fontsize=1)
+                except Exception:
+                    pass
+        self._doc[0].clean_contents()
 
     def close(self) -> None:
         if self._doc:
