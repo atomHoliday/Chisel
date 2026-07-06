@@ -15,6 +15,7 @@ class SelectTool(Tool):
         super().__init__(canvas, document)
         self._selected_span = None
         self._selected_annot = None
+        self._selected_annot_page = None
         self._page_num = -1
         self._pending_paste = None
         self._paste_pos = (0, 0)
@@ -44,6 +45,7 @@ class SelectTool(Tool):
             return True
         self._selected_span = None
         self._selected_annot = None
+        self._selected_annot_page = None
         self._canvas._selected_item = None
         self._canvas.queue_draw()
         return True
@@ -59,19 +61,20 @@ class SelectTool(Tool):
         if not doc or not doc.is_loaded:
             return False
         page_num = self._canvas.page_num
-
         span = find_span_at(doc, page_num, page_x, page_y)
         if span:
             self._selected_span = span
             self._selected_annot = None
+            self._selected_annot_page = None
             self._page_num = page_num
             self._canvas._selected_item = {"type": "text", "span": span}
             self._canvas.queue_draw()
             return True
 
-        annot = self._find_annot_at(doc, page_num, page_x, page_y)
+        page, annot = self._find_annot_at(doc, page_num, page_x, page_y)
         if annot:
             self._selected_annot = annot
+            self._selected_annot_page = page
             self._selected_span = None
             self._page_num = page_num
             self._canvas._selected_item = {"type": "annot", "annot": annot}
@@ -80,6 +83,7 @@ class SelectTool(Tool):
 
         self._selected_span = None
         self._selected_annot = None
+        self._selected_annot_page = None
         self._canvas._selected_item = None
         self._canvas.queue_draw()
         return True
@@ -172,6 +176,7 @@ class SelectTool(Tool):
             finally:
                 doc._doc.journal_stop_op()
             self._selected_annot = None
+            self._selected_annot_page = None
             self._selected_span = None
 
         self._page_num = self._canvas.page_num
@@ -184,19 +189,19 @@ class SelectTool(Tool):
 
     def _find_annot_at(self, doc, page_num, page_x, page_y):
         page = doc._doc[page_num]
-        try:
-            annot_iter = page.annots()
-            annots = list(annot_iter) if annot_iter else []
-        except Exception:
-            return None
+        annots = list(page.annots()) if page.annots() else []
         for annot in reversed(annots):
             try:
                 rect = annot.rect
             except Exception:
                 continue
             if rect.x0 <= page_x <= rect.x1 and rect.y0 <= page_y <= rect.y1:
-                return annot
-        return None
+                try:
+                    _ = annot.type
+                except Exception:
+                    continue
+                return (page, annot)
+        return (None, None)
 
     def delete_selected(self):
         if self._page_num != self._canvas.page_num:
@@ -210,9 +215,12 @@ class SelectTool(Tool):
             try:
                 page = doc._doc[self._page_num]
                 page.delete_annot(self._selected_annot)
+            except Exception:
+                pass
             finally:
                 doc.stop_op()
             self._selected_annot = None
+            self._selected_annot_page = None
             self._canvas._selected_item = None
             self._canvas._pixbuf = None
             self._canvas.queue_draw()
@@ -237,35 +245,39 @@ class SelectTool(Tool):
         return False
 
     def _serialize_annot(self, annot):
-        colors = annot.colors
-        border = annot.border
-        info = annot.info
-        rect = annot.rect
-        data = {
-            "type": "annot",
-            "annot_type": annot.type[1],
-            "rect": (rect.x0, rect.y0, rect.x1, rect.y1),
-            "colors": {
-                "stroke": colors.get("stroke", None) or None,
-                "fill": colors.get("fill", None) or None,
-            },
-            "border": {
-                "width": border.get("width", 0),
-                "dashes": border.get("dashes", ()),
-                "style": border.get("style", "S"),
-            },
-            "info": {
-                "content": info.get("content", ""),
-            },
-        }
-        if annot.type[1] == "Line":
-            data["line_ends"] = annot.line_ends
-        return data
+        try:
+            colors = annot.colors
+            border = annot.border
+            info = annot.info
+            rect = annot.rect
+            data = {
+                "type": "annot",
+                "annot_type": annot.type[1],
+                "rect": (rect.x0, rect.y0, rect.x1, rect.y1),
+                "colors": {
+                    "stroke": colors.get("stroke", None) or None,
+                    "fill": colors.get("fill", None) or None,
+                },
+                "border": {
+                    "width": border.get("width", 0),
+                    "dashes": border.get("dashes", ()),
+                    "style": border.get("style", "S"),
+                },
+                "info": {
+                    "content": info.get("content", ""),
+                },
+            }
+            if annot.type[1] == "Line":
+                data["line_ends"] = annot.line_ends
+            return data
+        except Exception:
+            return None
 
     def on_copy(self):
         if self._selected_annot is not None:
             data = self._serialize_annot(self._selected_annot)
-            get_clipboard().copy(data)
+            if data:
+                get_clipboard().copy(data)
             return True
         if self._selected_span is not None:
             span = self._selected_span
@@ -321,10 +333,17 @@ class SelectTool(Tool):
 
         if self._canvas._selected_item is None:
             self._selected_annot = None
+            self._selected_annot_page = None
             self._selected_span = None
 
         if self._selected_annot is not None:
-            r = self._selected_annot.rect
+            try:
+                r = self._selected_annot.rect
+            except Exception:
+                self._selected_annot = None
+                self._selected_annot_page = None
+                self._canvas._selected_item = None
+                return
             x = r.x0 * scale + scroll_x
             y = r.y0 * scale + scroll_y
             w = (r.x1 - r.x0) * scale

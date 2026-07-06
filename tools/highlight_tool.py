@@ -1,5 +1,5 @@
 from tools.base import Tool
-from drawing.theme import HIGHLIGHT_FILL, HIGHLIGHT_BORDER, HIGHLIGHT_WIDTH
+from drawing.theme import HIGHLIGHT_WIDTH
 
 
 class HighlightTool(Tool):
@@ -46,9 +46,12 @@ class HighlightTool(Tool):
             if doc and doc._doc:
                 page = doc._doc[self._canvas.page_num]
                 rect = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
+                tint = self._props.get("highlight_tint", (1.0, 0.8, 0.0))
                 doc._doc.journal_start_op("add highlight")
                 try:
-                    page.add_highlight_annot(rect)
+                    annot = page.add_highlight_annot(rect)
+                    annot.set_colors(stroke=tint)
+                    annot.update()
                 finally:
                     doc._doc.journal_stop_op()
                 self._canvas._pixbuf = None
@@ -66,11 +69,12 @@ class HighlightTool(Tool):
             y = min(sy, ey) * scale + scroll_y
             w = abs(ex - sx) * scale
             h = abs(ey - sy) * scale
+            tint = self._props.get("highlight_tint", (1.0, 0.8, 0.0))
             cr.save()
-            cr.set_source_rgba(*HIGHLIGHT_FILL)
+            cr.set_source_rgba(tint[0], tint[1], tint[2], 0.3)
             cr.rectangle(x, y, w, h)
             cr.fill()
-            cr.set_source_rgba(*HIGHLIGHT_BORDER)
+            cr.set_source_rgba(tint[0], tint[1], tint[2], 0.6)
             cr.set_line_width(HIGHLIGHT_WIDTH)
             cr.rectangle(x, y, w, h)
             cr.stroke()

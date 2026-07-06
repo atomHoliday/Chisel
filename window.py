@@ -34,6 +34,7 @@ class ToolProperties(GObject.Object):
             "has_arrow": False,
             "shape_type": "rectangle",
             "callout_text": "",
+            "highlight_tint": (1.0, 0.8, 0.0),
         }
 
     def get(self, key, default=None):
@@ -48,13 +49,38 @@ class ToolProperties(GObject.Object):
         self.emit("changed")
 
 
+STROKE_COLORS = [
+    ("Black", (0, 0, 0)),
+    ("Red", (0.8, 0, 0)),
+    ("Blue", (0, 0, 0.8)),
+    ("Green", (0, 0.6, 0)),
+]
+
+HIGHLIGHT_COLORS = [
+    ("Yellow", (1.0, 0.8, 0.0)),
+    ("Green", (0.0, 0.8, 0.0)),
+    ("Cyan", (0.0, 0.8, 0.8)),
+    ("Magenta", (1.0, 0.3, 1.0)),
+    ("Orange", (1.0, 0.5, 0.0)),
+    ("Blue", (0.3, 0.5, 1.0)),
+]
+
+WIDTH_VALUES = [1, 2, 4, 6]
+
+
 class PropertiesPanel(Gtk.Popover):
     def __init__(self, props, parent_widget):
         super().__init__()
         self._props = props
         self.set_parent(parent_widget)
         self.set_position(Gtk.PositionType.BOTTOM)
+        self._tool_mode = False
+        self._on_ok = None
+        self._on_cancel = None
+        self.connect("closed", self._on_closed)
+        self._build_full_panel()
 
+    def _new_grid(self):
         grid = Gtk.Grid()
         grid.add_css_class("properties-panel")
         grid.set_row_spacing(6)
@@ -63,76 +89,190 @@ class PropertiesPanel(Gtk.Popover):
         grid.set_margin_bottom(8)
         grid.set_margin_start(8)
         grid.set_margin_end(8)
+        return grid
 
-        row = 0
-        grid.attach(Gtk.Label(label="Stroke:"), 0, row, 1, 1)
-        color_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        for name, rgb in [("Black", (0, 0, 0)), ("Red", (0.8, 0, 0)),
-                          ("Blue", (0, 0, 0.8)), ("Green", (0, 0.6, 0))]:
+    def _attach_color_row(self, grid, row, label, colors, prop_key):
+        lbl = Gtk.Label(label=label)
+        lbl.set_xalign(0)
+        grid.attach(lbl, 0, row, 1, 1)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        current = self._props.get(prop_key, colors[0][1])
+        group = None
+        for name, rgb in colors:
             btn = Gtk.ToggleButton()
             btn.add_css_class("flat")
             area = Gtk.DrawingArea()
             area.set_size_request(20, 20)
             area.set_draw_func(lambda a, cr, w, h, c=rgb: (
-                cr.set_source_rgb(*c), cr.rectangle(2, 2, w-4, h-4), cr.fill()
+                cr.set_source_rgb(*c), cr.rectangle(2, 2, w - 4, h - 4), cr.fill()
             ))
             btn.set_child(area)
-            btn.connect("toggled", self._on_color, name, rgb)
-            if rgb == (0, 0, 0):
+            if group is not None:
+                btn.set_group(group)
+            else:
+                group = btn
+            btn.connect("toggled", lambda b, k=prop_key, v=rgb: (
+                b.get_active() and self._props.set(k, v)
+            ))
+            if rgb == current:
                 btn.set_active(True)
-            color_box.append(btn)
-        grid.attach(color_box, 1, row, 1, 1)
-        row += 1
+            box.append(btn)
+        grid.attach(box, 1, row, 1, 1)
+        return row + 1
 
-        grid.attach(Gtk.Label(label="Width:"), 0, row, 1, 1)
-        width_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        for val in [1, 2, 4, 6]:
+    def _attach_width_row(self, grid, row):
+        lbl = Gtk.Label(label="Width:")
+        lbl.set_xalign(0)
+        grid.attach(lbl, 0, row, 1, 1)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        current = self._props.get("stroke_width", 2)
+        group = None
+        for val in WIDTH_VALUES:
             btn = Gtk.ToggleButton(label=str(val))
             btn.add_css_class("flat")
-            btn.connect("toggled", self._on_width, val)
-            if val == 2:
+            if group is not None:
+                btn.set_group(group)
+            else:
+                group = btn
+            btn.connect("toggled", lambda b, v=val: (
+                b.get_active() and self._props.set("stroke_width", v)
+            ))
+            if val == current:
                 btn.set_active(True)
-            width_box.append(btn)
-        grid.attach(width_box, 1, row, 1, 1)
-        row += 1
+            box.append(btn)
+        grid.attach(box, 1, row, 1, 1)
+        return row + 1
 
-        self._fill_btn = Gtk.CheckButton(label="Fill")
-        self._fill_btn.connect("toggled", self._on_fill)
-        grid.attach(self._fill_btn, 0, row, 2, 1)
-        row += 1
+    def _attach_ok_cancel_row(self, grid, row):
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_margin_top(4)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self._on_cancel_clicked())
+        btn_box.append(cancel_btn)
+        ok_btn = Gtk.Button(label="OK")
+        ok_btn.add_css_class("suggested-action")
+        ok_btn.connect("clicked", lambda b: self._on_ok_clicked())
+        btn_box.append(ok_btn)
+        grid.attach(btn_box, 0, row, 2, 1)
+        return row + 1
 
-        self._arrow_btn = Gtk.CheckButton(label="Arrow")
-        self._arrow_btn.connect("toggled", self._on_arrow)
-        grid.attach(self._arrow_btn, 0, row, 2, 1)
+    def _build_full_panel(self):
+        grid = self._new_grid()
+        row = 0
+        row = self._attach_color_row(grid, row, "Stroke:", STROKE_COLORS, "stroke_color")
+        row = self._attach_width_row(grid, row)
+        fill_btn = Gtk.CheckButton(label="Fill")
+        fill_btn.set_active(self._props.get("fill_color", None) is not None)
+        fill_btn.connect("toggled", self._on_fill)
+        grid.attach(fill_btn, 0, row, 2, 1)
         row += 1
-
+        arrow_btn = Gtk.CheckButton(label="Arrow")
+        arrow_btn.set_active(self._props.get("has_arrow", False))
+        arrow_btn.connect("toggled", self._on_arrow)
+        grid.attach(arrow_btn, 0, row, 2, 1)
+        row += 1
         grid.attach(Gtk.Label(label="Shape:"), 0, row, 1, 1)
         shape_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        current_shape = self._props.get("shape_type", "rectangle")
+        group = None
         for name in ["rectangle", "circle"]:
             btn = Gtk.ToggleButton(label=name.capitalize())
             btn.add_css_class("flat")
-            btn.connect("toggled", self._on_shape, name)
-            if name == "rectangle":
+            if group is not None:
+                btn.set_group(group)
+            else:
+                group = btn
+            btn.connect("toggled", lambda b, n=name: (
+                b.get_active() and self._props.set("shape_type", n)
+            ))
+            if name == current_shape:
                 btn.set_active(True)
             shape_box.append(btn)
         grid.attach(shape_box, 1, row, 1, 1)
         row += 1
-
         grid.attach(Gtk.Label(label="Callout text:"), 0, row, 1, 1)
         text_entry = Gtk.Entry()
         text_entry.set_placeholder_text("Type here...")
-        text_entry.connect("changed", lambda e: props.set("callout_text", e.get_text()))
+        text_entry.set_text(self._props.get("callout_text", ""))
+        text_entry.connect("changed", lambda e: self._props.set("callout_text", e.get_text()))
         grid.attach(text_entry, 1, row, 1, 1)
-
         self.set_child(grid)
 
-    def _on_color(self, btn, name, rgb):
-        if btn.get_active():
-            self._props.set("stroke_color", rgb)
+    def _build_tool_panel(self, tool_id, on_ok, on_cancel):
+        self._tool_mode = True
+        self._on_ok = on_ok
+        self._on_cancel = on_cancel
+        grid = self._new_grid()
+        row = 0
+        if tool_id == "callout":
+            grid.attach(Gtk.Label(label="Text:"), 0, row, 1, 1)
+            text_entry = Gtk.Entry()
+            text_entry.set_placeholder_text("Type here...")
+            text_entry.set_text(self._props.get("callout_text", ""))
+            text_entry.connect("changed", lambda e: self._props.set("callout_text", e.get_text()))
+            grid.attach(text_entry, 1, row, 1, 1)
+            row += 1
+            row = self._attach_color_row(grid, row, "Stroke:", STROKE_COLORS, "stroke_color")
+            row = self._attach_width_row(grid, row)
+        elif tool_id == "shape":
+            row = self._attach_color_row(grid, row, "Stroke:", STROKE_COLORS, "stroke_color")
+            row = self._attach_width_row(grid, row)
+            fill_btn = Gtk.CheckButton(label="Fill")
+            fill_btn.set_active(self._props.get("fill_color", None) is not None)
+            fill_btn.connect("toggled", self._on_fill)
+            grid.attach(fill_btn, 0, row, 2, 1)
+            row += 1
+            grid.attach(Gtk.Label(label="Shape:"), 0, row, 1, 1)
+            shape_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+            current_shape = self._props.get("shape_type", "rectangle")
+            group = None
+            for name in ["rectangle", "circle"]:
+                btn = Gtk.ToggleButton(label=name.capitalize())
+                btn.add_css_class("flat")
+                if group is not None:
+                    btn.set_group(group)
+                else:
+                    group = btn
+                btn.connect("toggled", lambda b, n=name: (
+                    b.get_active() and self._props.set("shape_type", n)
+                ))
+                if name == current_shape:
+                    btn.set_active(True)
+                shape_box.append(btn)
+            grid.attach(shape_box, 1, row, 1, 1)
+            row += 1
+        elif tool_id == "line":
+            row = self._attach_color_row(grid, row, "Stroke:", STROKE_COLORS, "stroke_color")
+            row = self._attach_width_row(grid, row)
+            arrow_btn = Gtk.CheckButton(label="Arrow")
+            arrow_btn.set_active(self._props.get("has_arrow", False))
+            arrow_btn.connect("toggled", self._on_arrow)
+            grid.attach(arrow_btn, 0, row, 2, 1)
+            row += 1
+        elif tool_id == "highlight":
+            row = self._attach_color_row(grid, row, "Tint:", HIGHLIGHT_COLORS, "highlight_tint")
+        self._attach_ok_cancel_row(grid, row)
+        self.set_child(grid)
 
-    def _on_width(self, btn, val):
-        if btn.get_active():
-            self._props.set("stroke_width", val)
+    def _on_closed(self, *args):
+        if self._tool_mode:
+            self._tool_mode = False
+            self._on_ok = None
+            self._on_cancel = None
+            self._build_full_panel()
+
+    def _on_ok_clicked(self):
+        if self._on_ok:
+            self._on_ok()
+
+    def _on_cancel_clicked(self):
+        if self._on_cancel:
+            self._on_cancel()
+
+    def show_for_tool(self, tool_id, on_ok, on_cancel):
+        self._build_tool_panel(tool_id, on_ok, on_cancel)
+        self.popup()
 
     def _on_fill(self, btn):
         if btn.get_active():
@@ -142,10 +282,6 @@ class PropertiesPanel(Gtk.Popover):
 
     def _on_arrow(self, btn):
         self._props.set("has_arrow", btn.get_active())
-
-    def _on_shape(self, btn, name):
-        if btn.get_active():
-            self._props.set("shape_type", name)
 
 
 class PageThumbnailRow(Gtk.ListBoxRow):
@@ -409,6 +545,10 @@ class ChiselWindow(Adw.ApplicationWindow):
         tool_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         tool_box.add_css_class("chisel-toolbox")
         self._tool_buttons = []
+        self._tool_button_map = {}
+        self._active_tool_id = "pan"
+        self._pending_tool_id = None
+        self._suppress_tool_toggle = False
 
         tools_config = [
             ("pan", "Pan", "Pan (default)", f"{icon_dir}/chisel-pan.svg"),
@@ -443,8 +583,9 @@ class ChiselWindow(Adw.ApplicationWindow):
             btn.connect("toggled", self._on_tool_toggled, tool_id)
             tool_box.append(btn)
             self._tool_buttons.append(btn)
+            self._tool_button_map[tool_id] = btn
 
-        self._tool_buttons[0].set_active(True)
+        self._tool_buttons[1].set_active(True)
         headerbar.pack_start(tool_box)
 
         self._props_btn = Gtk.Button()
@@ -546,7 +687,34 @@ class ChiselWindow(Adw.ApplicationWindow):
     def _on_tool_toggled(self, button, tool_id):
         if not button.get_active():
             return
+        if self._suppress_tool_toggle:
+            self._suppress_tool_toggle = False
+            return
+        if tool_id in ("callout", "shape", "line", "highlight"):
+            self._pending_tool_id = tool_id
+            self._prev_tool_id = self._active_tool_id
+            self._props_panel.show_for_tool(
+                tool_id,
+                on_ok=self._on_tool_config_ok,
+                on_cancel=self._on_tool_config_cancel,
+            )
+            return
+        self._active_tool_id = tool_id
         self._canvas.set_active_tool(self._tools.get(tool_id))
+
+    def _on_tool_config_ok(self):
+        self._props_panel.popdown()
+        self._active_tool_id = self._pending_tool_id
+        self._canvas.set_active_tool(self._tools.get(self._pending_tool_id))
+        self._pending_tool_id = None
+
+    def _on_tool_config_cancel(self):
+        self._props_panel.popdown()
+        prev_id = self._prev_tool_id
+        self._pending_tool_id = None
+        self._suppress_tool_toggle = True
+        if prev_id in self._tool_button_map:
+            self._tool_button_map[prev_id].set_active(True)
 
     def _toggle_sidebar(self, button):
         self._sidebar_visible = not self._sidebar_visible
