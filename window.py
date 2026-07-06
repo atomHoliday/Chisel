@@ -336,6 +336,24 @@ class ChiselWindow(Adw.ApplicationWindow):
         self._toast_overlay.set_child(self._overlay)
         self._setup_tools()
 
+        self._branding_overlay = Gtk.Overlay()
+        self._branding_overlay.set_child(self._toast_overlay)
+
+        branding = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        branding.add_css_class("uncapdocs-branding")
+        logo = Gtk.Image.new_from_file(os.path.join(os.path.dirname(__file__), "icons", "uncapdocs-logo.png"))
+        logo.set_pixel_size(20)
+        branding.append(logo)
+        label = Gtk.Label(label="UnCapDocs")
+        label.add_css_class("uncapdocs-label")
+        branding.append(label)
+        branding.set_halign(Gtk.Align.END)
+        branding.set_valign(Gtk.Align.END)
+        branding.set_margin_end(12)
+        branding.set_margin_bottom(8)
+        self._branding_overlay.add_overlay(branding)
+        self._branding_overlay.set_measure_overlay(branding, False)
+
         self.set_default_size(1024, 768)
         self.set_title("Chisel")
         self.connect("notify::fullscreened", self._on_fullscreen_changed)
@@ -343,8 +361,14 @@ class ChiselWindow(Adw.ApplicationWindow):
 
         headerbar = Adw.HeaderBar()
 
+        chisel_label = Gtk.Label(label="Chisel")
+        chisel_label.add_css_class("headerbar-branding")
+        headerbar.pack_start(chisel_label)
+
         file_button = Gtk.MenuButton()
-        file_button.set_child(Gtk.Image.new_from_icon_name("open-menu-symbolic"))
+        chisel_icon = Gtk.Image.new_from_file(os.path.join(icon_dir, "..", "com.uncapyeti.chisel.svg"))
+        chisel_icon.set_pixel_size(20)
+        file_button.set_child(chisel_icon)
         file_button.set_tooltip_text("File menu")
         file_menu_xml = '''<?xml version="1.0" encoding="UTF-8"?>
 <interface>
@@ -476,7 +500,7 @@ class ChiselWindow(Adw.ApplicationWindow):
 
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_start_child(self._sidebar)
-        paned.set_end_child(self._toast_overlay)
+        paned.set_end_child(self._branding_overlay)
         paned.set_shrink_start_child(False)
         paned.set_resize_start_child(False)
 

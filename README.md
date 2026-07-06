@@ -1,6 +1,30 @@
-# Chisel
+# Chisel — The interactive PDF editor
 
-The interactive PDF editor.
+A native, open-source PDF editor for Linux. Annotate documents, edit text, manage pages, redact content, and more — all with a polished GTK4/Adwaita interface. No cloud, no subscriptions, no tracking.
+
+---
+
+## Features
+
+📝 **Edit text in place** — Click any text span and rewrite it directly on the page. Undo and redo supported.
+
+🖍️ **Annotate & markup** — Highlights, lines, arrows, rectangles, circles, and callout boxes with customizable stroke color, width, and fill.
+
+✂️ **Redact** — Permanently remove sensitive content with the cut tool. Draw a rectangle and apply — the content is gone.
+
+🖼️ **Insert images** — Place images onto pages by clicking or dragging a rectangle. Paste from clipboard too.
+
+🧮 **Fraction editor** — Detects mathematical fractions in PDF text and opens a dedicated editing dialog.
+
+📄 **Page management** — Insert, delete, duplicate, and reorder pages. Continuous scroll or single-page view.
+
+↩️ **Undo / redo** — Full journal-based undo history. Undo anything, even across pages.
+
+🌗 **Dark mode** — Follows your system theme via Adwaita. No config needed.
+
+🔍 **Thumbnail sidebar** — Zoomable page thumbnails with right-click context menu for page operations.
+
+---
 
 ## Install
 
@@ -33,18 +57,7 @@ cd chisel
 python main.py
 ```
 
-## Features
-
-- Open and save PDF files
-- Annotate — highlights, lines, arrows, shapes, callouts
-- Edit text in place
-- Fraction detection and editing
-- Insert and paste images
-- Cut / redact content
-- Undo / redo (Ctrl+Z / Ctrl+Shift+Z)
-- Continuous scroll or single-page view
-- Dark mode support
-- Zoomable page thumbnail sidebar
+---
 
 ## Keyboard shortcuts
 

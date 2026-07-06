@@ -67,3 +67,20 @@
     border-radius: 4px;
     padding: 4px 6px;
 }
+
+.headerbar-branding {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-end: 8px;
+}
+
+.uncapdocs-branding {
+    background: alpha(@window_bg_color, 0.7);
+    border-radius: 8px;
+    padding: 4px 10px;
+}
+
+.uncapdocs-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
