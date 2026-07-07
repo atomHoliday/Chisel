@@ -490,7 +490,7 @@ class ChiselWindow(Adw.ApplicationWindow):
         self._branding_overlay.add_overlay(branding)
         self._branding_overlay.set_measure_overlay(branding, False)
 
-        self.set_default_size(1024, 768)
+        self.set_default_size(800, 600)
         self.set_title("Chisel")
         self.connect("notify::fullscreened", self._on_fullscreen_changed)
         self.connect("notify::maximized", self._on_fullscreen_changed)
@@ -638,6 +638,7 @@ class ChiselWindow(Adw.ApplicationWindow):
 
         self._sidebar = PageSidebar(self._page_manager)
         self._sidebar.connect("page-selected", self._on_sidebar_page_selected)
+        self._canvas.connect("page-changed", self._on_canvas_page_changed)
 
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_start_child(self._sidebar)
@@ -652,6 +653,8 @@ class ChiselWindow(Adw.ApplicationWindow):
         self.set_content(box)
         self._setup_actions()
         self._sidebar_visible = True
+        self._tiled_sidebar_hidden = False
+        self.connect("map", self._on_map)
         self._load_css()
 
     def _load_css(self):
@@ -669,6 +672,26 @@ class ChiselWindow(Adw.ApplicationWindow):
 
     def _on_continuous_toggled(self, button):
         self._canvas.toggle_continuous()
+
+    def _on_map(self, widget):
+        surface = self.get_surface()
+        if surface is not None:
+            surface.connect("notify::state", self._on_toplevel_state_changed)
+
+    def _on_toplevel_state_changed(self, surface, pspec):
+        state = surface.get_state()
+        tiled = state & Gdk.ToplevelState.TILED
+        if tiled:
+            if self._sidebar_visible and not self._tiled_sidebar_hidden:
+                self._sidebar.set_visible(False)
+                self._tiled_sidebar_hidden = True
+                self._sidebar_button.set_icon_name("sidebar-show-symbolic")
+        else:
+            if self._tiled_sidebar_hidden:
+                self._sidebar.set_visible(self._sidebar_visible)
+                self._tiled_sidebar_hidden = False
+                icon = "sidebar-show-symbolic" if self._sidebar_visible else "sidebar-hide-symbolic"
+                self._sidebar_button.set_icon_name(icon)
 
     def _setup_tools(self):
         self._tools = {
@@ -717,10 +740,16 @@ class ChiselWindow(Adw.ApplicationWindow):
             self._tool_button_map[prev_id].set_active(True)
 
     def _toggle_sidebar(self, button):
-        self._sidebar_visible = not self._sidebar_visible
-        self._sidebar.set_visible(self._sidebar_visible)
-        icon = "sidebar-show-symbolic" if self._sidebar_visible else "sidebar-hide-symbolic"
-        self._sidebar_button.set_icon_name(icon)
+        if self._tiled_sidebar_hidden:
+            self._sidebar_visible = True
+            self._tiled_sidebar_hidden = False
+            self._sidebar.set_visible(True)
+            self._sidebar_button.set_icon_name("sidebar-hide-symbolic")
+        else:
+            self._sidebar_visible = not self._sidebar_visible
+            self._sidebar.set_visible(self._sidebar_visible)
+            icon = "sidebar-show-symbolic" if self._sidebar_visible else "sidebar-hide-symbolic"
+            self._sidebar_button.set_icon_name(icon)
 
     def _setup_actions(self):
         for name in ("open", "save", "save-as", "flatten"):
@@ -870,6 +899,9 @@ class ChiselWindow(Adw.ApplicationWindow):
 
     def _on_sidebar_page_selected(self, sidebar, page_num):
         self._canvas.set_page(page_num)
+        self._update_page_label()
+
+    def _on_canvas_page_changed(self, canvas, page_num):
         self._update_page_label()
 
     def _update_page_label(self):

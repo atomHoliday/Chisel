@@ -3,12 +3,13 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Gdk, GdkPixbuf, Adw
+from gi.repository import Gtk, Gdk, GdkPixbuf, Adw, GObject
 from gi.repository import cairo
 from gi.repository import GLib
 
 
 CLICK_THRESHOLD = 8
+SCROLL_SPEED = 15.0
 
 _SHORTCUTS = [
     ("Ctrl+O", "Open PDF"),
@@ -44,6 +45,10 @@ _TOOLS = [
 
 
 class PdfCanvas(Gtk.DrawingArea):
+    __gsignals__ = {
+        "page-changed": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
+    }
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._document = None
@@ -346,10 +351,13 @@ class PdfCanvas(Gtk.DrawingArea):
 
         # Update current page from viewport center
         center_y = self._scroll_y + h / 2
+        old_page = self._page_num
         for p, py, _, ph_disp in self._page_offsets:
             if py <= center_y < py + ph_disp:
                 self._page_num = p
                 break
+        if self._page_num != old_page:
+            self.emit("page-changed", self._page_num)
 
         viewport_top = self._scroll_y - last[3]
         viewport_bot = self._scroll_y + h + last[3]
@@ -386,7 +394,7 @@ class PdfCanvas(Gtk.DrawingArea):
 
     def _tool_scroll_for_pos(self, x, y):
         if not self._continuous or not self._page_offsets:
-            return self._draw_x, self._scroll_y
+            return self._draw_x, self._draw_y
         p, poff = self._find_page_at_y(y, 1.0, self._scroll_y)
         self._page_num = p
         alloc = self.get_allocation()
@@ -467,7 +475,7 @@ class PdfCanvas(Gtk.DrawingArea):
             self._invalidate_cache()
             self.queue_draw()
         else:
-            self._scroll_y -= dy
+            self._scroll_y += dy * SCROLL_SPEED
             self.queue_draw()
         return True
 

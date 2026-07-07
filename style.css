@@ -1,8 +1,8 @@
 .chisel-toolbox button {
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 3px 5px;
     margin: 0 1px;
-    min-width: 36px;
+    min-width: 28px;
     min-height: 32px;
     transition: background 150ms ease;
 }
@@ -24,7 +24,7 @@
 
 .chisel-navbox button {
     border-radius: 6px;
-    min-width: 32px;
+    min-width: 24px;
     min-height: 32px;
     padding: 2px;
     transition: background 150ms ease;
