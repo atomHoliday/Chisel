@@ -135,7 +135,8 @@ class ImageTool(Tool):
                     img_rect = (page_x, page_y, page_x + img_w, page_y + img_h)
                     insert_image_file(doc, page_num, img_rect, path)
 
-            self._canvas._pixbuf = None
+            self._canvas.invalidate_cache()
+            self._canvas.invalidate_page_cache(self._canvas.page_num)
             self._canvas.queue_draw()
         except GLib.Error as e:
             if "dismissed" not in str(e).lower():
@@ -152,7 +153,7 @@ class ImageTool(Tool):
         else:
             cx, cy = 200, 200
         target_x, target_y = self.canvas_to_page(
-            cx, cy, self._canvas.scale, self._canvas._scroll_x, self._canvas._scroll_y
+            cx, cy, self._canvas.scale, self._canvas.draw_x, self._canvas.draw_y
         )
         clipboard = self._window.get_clipboard()
         clipboard.read_texture_async(
@@ -170,7 +171,7 @@ class ImageTool(Tool):
             png_bytes = texture.save_to_png_bytes()
             image_data = png_bytes.get_data()
             doc = self._document
-            if not doc or not doc._doc:
+            if not doc or not doc.doc:
                 return
             page_num, px, py = pos_data
             pw, ph = doc.get_page_size(page_num)
@@ -179,7 +180,8 @@ class ImageTool(Tool):
             img_h = th * (img_w / tw) if tw > 0 else img_w
             rect = (px, py, px + img_w, py + img_h)
             insert_image_bytes(doc, page_num, rect, image_data)
-            self._canvas._pixbuf = None
+            self._canvas.invalidate_cache()
+            self._canvas.invalidate_page_cache(self._canvas.page_num)
             self._canvas.queue_draw()
         except Exception:
             import traceback

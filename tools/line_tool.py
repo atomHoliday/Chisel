@@ -44,13 +44,13 @@ class LineTool(Tool):
             sx, sy = self._start
             ex, ey = self._end
             doc = self._document
-            if doc and doc._doc:
-                page = doc._doc[self._canvas.page_num]
+            if doc and doc.doc:
+                page = doc.doc[self._canvas.page_num]
                 color = self._props.get("stroke_color", (0, 0, 0))
                 width = self._props.get("stroke_width", 1)
                 is_arrow = self._props.get("has_arrow", False)
 
-                doc._doc.journal_start_op("add line")
+                doc.doc.journal_start_op("add line")
                 try:
                     annot = page.add_line_annot((sx, sy), (ex, ey))
                     annot.set_colors(stroke=color)
@@ -62,9 +62,10 @@ class LineTool(Tool):
                         )
                     annot.update()
                 finally:
-                    doc._doc.journal_stop_op()
+                    doc.doc.journal_stop_op()
 
-                self._canvas._pixbuf = None
+                self._canvas.invalidate_cache()
+                self._canvas.invalidate_page_cache(self._canvas.page_num)
                 self._canvas.queue_draw()
         self._start = None
         self._end = None

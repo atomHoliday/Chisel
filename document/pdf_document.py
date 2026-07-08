@@ -7,6 +7,10 @@ class PdfDocument:
         self._path: str | None = None
 
     @property
+    def doc(self):
+        return self._doc
+
+    @property
     def is_loaded(self) -> bool:
         return self._doc is not None
 
@@ -17,13 +21,6 @@ class PdfDocument:
     @property
     def page_count(self) -> int:
         return len(self._doc) if self._doc else 0
-
-    def load(self, path: str) -> None:
-        self.close()
-        self._doc = pymupdf.open(path)
-        self._path = path
-        self._preload_fonts()
-        self._doc.journal_enable()
 
     def _preload_fonts(self):
         if not self._doc or self._doc.page_count == 0:
@@ -36,7 +33,13 @@ class PdfDocument:
                     page.insert_text((-100, -100), ".", fontname=fname, fontsize=1)
                 except Exception:
                     pass
-        self._doc[0].clean_contents()
+
+    def load(self, path: str) -> None:
+        self.close()
+        self._doc = pymupdf.open(path)
+        self._path = path
+        self._preload_fonts()
+        self._doc.journal_enable()
 
     def close(self) -> None:
         if self._doc:
@@ -64,8 +67,7 @@ class PdfDocument:
             return
         save_path = path or self._path
         if save_path:
-            use_incremental = save_path == self._path
-            self._doc.save(save_path, incremental=use_incremental, deflate=True)
+            self._doc.save(save_path, deflate=True)
 
     def save_as(self, path):
         if self._doc is None:

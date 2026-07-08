@@ -44,15 +44,15 @@ class ShapeTool(Tool):
             sx, sy = self._start
             ex, ey = self._end
             doc = self._document
-            if doc and doc._doc:
-                page = doc._doc[self._canvas.page_num]
+            if doc and doc.doc:
+                page = doc.doc[self._canvas.page_num]
                 color = self._props.get("stroke_color", (0, 0, 0))
                 width = self._props.get("stroke_width", 1)
                 fill = self._props.get("fill_color", None)
                 shape_type = self._props.get("shape_type", "rectangle")
                 rect = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
 
-                doc._doc.journal_start_op("add shape")
+                doc.doc.journal_start_op("add shape")
                 try:
                     if shape_type == "circle":
                         annot = page.add_circle_annot(rect)
@@ -65,9 +65,10 @@ class ShapeTool(Tool):
                     if fill:
                         annot.set_opacity(0.3)
                 finally:
-                    doc._doc.journal_stop_op()
+                    doc.doc.journal_stop_op()
 
-                self._canvas._pixbuf = None
+                self._canvas.invalidate_cache()
+                self._canvas.invalidate_page_cache(self._canvas.page_num)
                 self._canvas.queue_draw()
         self._start = None
         self._end = None

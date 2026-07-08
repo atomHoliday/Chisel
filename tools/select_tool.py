@@ -55,7 +55,7 @@ class SelectTool(Tool):
         self._resize_original_rect = None
         self._resize_drag_start = None
         self._resize_preview_rect = None
-        self._canvas._selected_item = None
+        self._canvas.selected_item = None
         self._canvas.queue_draw()
         return True
 
@@ -93,7 +93,7 @@ class SelectTool(Tool):
             self._selected_annot = None
             self._selected_annot_page = None
             self._page_num = page_num
-            self._canvas._selected_item = {"type": "text", "span": span}
+            self._canvas.selected_item = {"type": "text", "span": span}
             self._canvas.queue_draw()
             return True
 
@@ -103,14 +103,14 @@ class SelectTool(Tool):
             self._selected_annot_page = page
             self._selected_span = None
             self._page_num = page_num
-            self._canvas._selected_item = {"type": "annot", "annot": annot}
+            self._canvas.selected_item = {"type": "annot", "annot": annot}
             self._canvas.queue_draw()
             return True
 
         self._selected_span = None
         self._selected_annot = None
         self._selected_annot_page = None
-        self._canvas._selected_item = None
+        self._canvas.selected_item = None
         self._canvas.queue_draw()
         return True
 
@@ -139,7 +139,8 @@ class SelectTool(Tool):
             return True
         if self._resize_mode and self._resize_preview_rect:
             self._apply_resize(self._resize_preview_rect)
-            self._canvas._pixbuf = None
+            self._canvas.invalidate_cache()
+            self._canvas.invalidate_page_cache(self._canvas.page_num)
             self._canvas.queue_draw()
         self._resize_mode = None
         self._resize_original_rect = None
@@ -150,13 +151,13 @@ class SelectTool(Tool):
     def _commit_paste(self, page_x, page_y):
         data = self._pending_paste
         doc = self._document
-        if not doc or not doc._doc:
+        if not doc or not doc.doc:
             return
-        page = doc._doc[self._canvas.page_num]
+        page = doc.doc[self._canvas.page_num]
         self._pending_paste = None
 
         if data["type"] == "annot":
-            doc._doc.journal_start_op("paste annot")
+            doc.doc.journal_start_op("paste annot")
             try:
                 r = data["rect"]
                 ow = r[2] - r[0]
@@ -198,7 +199,7 @@ class SelectTool(Tool):
                     new_annot.set_border(width=bw)
                 new_annot.update()
             finally:
-                doc._doc.journal_stop_op()
+                doc.doc.journal_stop_op()
 
             self._selected_annot = new_annot
             self._selected_span = None
@@ -217,26 +218,27 @@ class SelectTool(Tool):
             fontname = _builtin_font(font_name)
             _, ph = doc.get_page_size(self._canvas.page_num)
             py = ph - page_y
-            doc._doc.journal_start_op("paste text")
+            doc.doc.journal_start_op("paste text")
             try:
                 page.insert_text((page_x, py), text, fontname=fontname, fontsize=font_size, color=color)
             finally:
-                doc._doc.journal_stop_op()
+                doc.doc.journal_stop_op()
             self._selected_annot = None
             self._selected_annot_page = None
             self._selected_span = None
 
         self._page_num = self._canvas.page_num
         if data["type"] == "annot":
-            self._canvas._selected_item = {"type": "annot", "annot": new_annot}
+            self._canvas.selected_item = {"type": "annot", "annot": new_annot}
         else:
-            self._canvas._selected_item = None
-        self._canvas._pixbuf = None
+            self._canvas.selected_item = None
+        self._canvas.invalidate_cache()
+        self._canvas.invalidate_page_cache(self._canvas.page_num)
         self._canvas.queue_draw()
 
     def _find_annot_at(self, doc, page_num, page_x, page_y):
-        page = doc._doc[page_num]
-        annots = list(page.annots()) if page.annots() else []
+        page = doc.doc[page_num]
+        annots = list(page.annots() or [])
         for annot in reversed(annots):
             try:
                 rect = annot.rect
@@ -349,9 +351,9 @@ class SelectTool(Tool):
             p1 = (new_rect[0], new_rect[1]) if handle in ("nw", "n", "w") else (orig[0], orig[1])
             p2 = (new_rect[2], new_rect[3]) if handle in ("se", "s", "e") else (orig[2], orig[3])
             try:
-                self._document._doc.journal_start_op("resize line")
-                page = self._document._doc[self._canvas.page_num]
-                annots = list(page.annots()) if page.annots() else []
+                self._document.doc.journal_start_op("resize line")
+                page = self._document.doc[self._canvas.page_num]
+                annots = list(page.annots() or [])
                 for a in annots:
                     if a == annot:
                         rect = pymupdf.Rect(
@@ -362,30 +364,30 @@ class SelectTool(Tool):
                         a.set_line_ends(annot.line_ends[0], annot.line_ends[1])
                         a.update()
                         break
-                self._document._doc.journal_stop_op()
+                self._document.doc.journal_stop_op()
             except Exception:
-                self._document._doc.journal_stop_op()
+                self._document.doc.journal_stop_op()
         else:
             try:
-                self._document._doc.journal_start_op("resize annot")
+                self._document.doc.journal_start_op("resize annot")
                 rect = pymupdf.Rect(new_rect[0], new_rect[1], new_rect[2], new_rect[3])
                 annot.set_rect(rect)
                 annot.update()
-                self._document._doc.journal_stop_op()
+                self._document.doc.journal_stop_op()
             except Exception:
-                self._document._doc.journal_stop_op()
+                self._document.doc.journal_stop_op()
 
     def delete_selected(self):
         if self._page_num != self._canvas.page_num:
             return False
         doc = self._document
-        if not doc or not doc._doc:
+        if not doc or not doc.doc:
             return False
 
         if self._selected_annot is not None:
             doc.start_op("delete selected")
             try:
-                page = doc._doc[self._page_num]
+                page = doc.doc[self._page_num]
                 page.delete_annot(self._selected_annot)
             except Exception:
                 pass
@@ -393,15 +395,16 @@ class SelectTool(Tool):
                 doc.stop_op()
             self._selected_annot = None
             self._selected_annot_page = None
-            self._canvas._selected_item = None
-            self._canvas._pixbuf = None
+            self._canvas.selected_item = None
+            self._canvas.invalidate_cache()
+            self._canvas.invalidate_page_cache(self._canvas.page_num)
             self._canvas.queue_draw()
             return True
 
         if self._selected_span is not None:
             doc.start_op("delete selected")
             try:
-                page = doc._doc[self._page_num]
+                page = doc.doc[self._page_num]
                 annot = page.add_redact_annot(self._selected_span.bbox)
                 annot.set_colors(fill=(1, 1, 1))
                 page.apply_redactions()
@@ -409,8 +412,9 @@ class SelectTool(Tool):
             finally:
                 doc.stop_op()
             self._selected_span = None
-            self._canvas._selected_item = None
-            self._canvas._pixbuf = None
+            self._canvas.selected_item = None
+            self._canvas.invalidate_cache()
+            self._canvas.invalidate_page_cache(self._canvas.page_num)
             self._canvas.queue_draw()
             return True
 
@@ -520,7 +524,7 @@ class SelectTool(Tool):
         if self._page_num != self._canvas.page_num:
             return
 
-        if self._canvas._selected_item is None:
+        if self._canvas.selected_item is None:
             self._selected_annot = None
             self._selected_annot_page = None
             self._selected_span = None
@@ -531,7 +535,7 @@ class SelectTool(Tool):
             except Exception:
                 self._selected_annot = None
                 self._selected_annot_page = None
-                self._canvas._selected_item = None
+                self._canvas.selected_item = None
                 return
             x = r.x0 * scale + scroll_x
             y = r.y0 * scale + scroll_y
@@ -586,3 +590,6 @@ class SelectTool(Tool):
     @property
     def has_selection(self):
         return self._selected_span is not None or self._selected_annot is not None
+
+    def on_delete(self):
+        return self.delete_selected()

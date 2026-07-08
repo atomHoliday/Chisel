@@ -180,13 +180,13 @@ class FractionEditTool(Tool):
         new_den = self._den_entry.get_text() if self._den_entry else ""
         frac = self._selected_fraction
         doc = self._document
-        if not doc or not doc._doc:
+        if not doc or not doc.doc:
             return
         if self._page_num != self._canvas.page_num:
             return
 
         try:
-            page = doc._doc[self._page_num]
+            page = doc.doc[self._page_num]
 
             # Capture vector drawings that overlap the fraction area
             fx0, fy0, fx1, fy1 = frac.bbox
@@ -207,7 +207,7 @@ class FractionEditTool(Tool):
                         "fill_opacity": d.get("fill_opacity", 1),
                     })
             print(f"[FRAC] captured {len(captured)} drawings to re-draw", file=sys.stderr)
-            doc._doc.journal_start_op("edit fraction")
+            doc.doc.journal_start_op("edit fraction")
             try:
                 page.add_redact_annot(frac.bbox).set_colors(fill=(1, 1, 1))
                 page.apply_redactions()
@@ -269,7 +269,7 @@ class FractionEditTool(Tool):
                     shape.finish(**kw)
                     shape.commit()
             finally:
-                doc._doc.journal_stop_op()
+                doc.doc.journal_stop_op()
 
             if self._toast_overlay:
                 self._toast_overlay.add_toast(Adw.Toast.new("Fraction updated"))
@@ -284,7 +284,8 @@ class FractionEditTool(Tool):
         self._close_popover()
         self._selected_fraction = None
         self._refresh_fractions()
-        self._canvas._pixbuf = None
+        self._canvas.invalidate_cache()
+        self._canvas.invalidate_page_cache(self._canvas.page_num)
         self._canvas.queue_draw()
 
     def draw_overlay(self, cr, width, height, scale, scroll_x, scroll_y):

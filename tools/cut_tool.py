@@ -42,16 +42,18 @@ class CutTool(Tool):
             sx, sy = self._drag_start
             ex, ey = self._drag_end
             doc = self._document
-            if doc and doc._doc:
-                page = doc._doc[self._canvas.page_num]
+            if doc and doc.doc:
+                page = doc.doc[self._canvas.page_num]
                 rect = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
-                doc._doc.journal_start_op("cut")
+                doc.doc.journal_start_op("cut")
                 try:
                     page.add_redact_annot(rect)
                     page.apply_redactions()
+                    page.clean_contents()
                 finally:
-                    doc._doc.journal_stop_op()
-                self._canvas._pixbuf = None
+                    doc.doc.journal_stop_op()
+                self._canvas.invalidate_cache()
+                self._canvas.invalidate_page_cache(self._canvas.page_num)
                 self._canvas.queue_draw()
         self._drag_start = None
         self._drag_end = None

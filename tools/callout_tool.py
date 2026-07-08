@@ -42,13 +42,13 @@ class CalloutTool(Tool):
 
     def on_drag_end(self, x, y, scale, scroll_x, scroll_y):
         doc = self._document
-        if not doc or not doc._doc:
+        if not doc or not doc.doc:
             self._reset()
             return True
         if self._is_dragging and self._origin and self._current:
             ox, oy = self._origin
             cx, cy = self._current
-            page = doc._doc[self._canvas.page_num]
+            page = doc.doc[self._canvas.page_num]
             color = self._props.get("stroke_color", (0, 0, 0))
             width = self._props.get("stroke_width", 1)
             text = self._props.get("callout_text", "")
@@ -60,7 +60,7 @@ class CalloutTool(Tool):
             bx0, by0, bx1, by1 = _compute_box(ox, oy, cx, cy, box_w, box_h)
             ex, ey = _edge_point(bx0, by0, bx1, by1, ox, oy)
 
-            doc._doc.journal_start_op("add callout")
+            doc.doc.journal_start_op("add callout")
             try:
                 page.add_freetext_annot(
                     pymupdf.Rect(bx0, by0, bx1, by1),
@@ -79,9 +79,10 @@ class CalloutTool(Tool):
                 dot.set_border(width=0)
                 dot.update()
             finally:
-                doc._doc.journal_stop_op()
+                doc.doc.journal_stop_op()
 
-            self._canvas._pixbuf = None
+            self._canvas.invalidate_cache()
+            self._canvas.invalidate_page_cache(self._canvas.page_num)
             self._canvas.queue_draw()
         self._reset()
         return True

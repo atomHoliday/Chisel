@@ -28,9 +28,9 @@ class Fraction:
 
 
 def get_horizontal_lines(doc, page_num):
-    if doc._doc is None:
+    if doc.doc is None:
         return []
-    page = doc._doc[page_num]
+    page = doc.doc[page_num]
     drawings = page.get_drawings()
     lines = []
     for d in drawings:

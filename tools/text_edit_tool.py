@@ -127,7 +127,7 @@ class TextEditTool(Tool):
         span = self._editing_span
         print(f"[TEXT_TOOL] _apply_edit: old={span.text!r} -> new={new_text!r}", file=sys.stderr)
         doc = self._document
-        if not doc or not doc._doc:
+        if not doc or not doc.doc:
             print("[TEXT_TOOL] _apply_edit: no document", file=sys.stderr)
             return
         if self._page_num != self._canvas.page_num:
@@ -135,9 +135,9 @@ class TextEditTool(Tool):
             return
         print(f"[TEXT_TOOL] _apply_edit: page_num={self._page_num}, bbox={span.bbox}, origin={span.origin}", file=sys.stderr)
         try:
-            page = doc._doc[self._page_num]
+            page = doc.doc[self._page_num]
             print("[TEXT_TOOL] start journal op", file=sys.stderr)
-            doc._doc.journal_start_op("edit text")
+            doc.doc.journal_start_op("edit text")
             try:
                 print("[TEXT_TOOL] adding redact annotation", file=sys.stderr)
                 annot = page.add_redact_annot(span.bbox)
@@ -161,7 +161,7 @@ class TextEditTool(Tool):
                 else:
                     print("[TEXT_TOOL] new_text is empty, skipping insert_text", file=sys.stderr)
             finally:
-                doc._doc.journal_stop_op()
+                doc.doc.journal_stop_op()
             self._toast("Text updated")
         except Exception as e:
             print(f"[TEXT_TOOL] ERROR in _apply_edit: {e}", file=sys.stderr)
@@ -169,5 +169,6 @@ class TextEditTool(Tool):
             traceback.print_exc(file=sys.stderr)
             self._toast(f"Error: {e}")
         print("[TEXT_TOOL] invalidating pixbuf and queueing redraw", file=sys.stderr)
-        self._canvas._pixbuf = None
+        self._canvas.invalidate_cache()
+        self._canvas.invalidate_page_cache(self._canvas.page_num)
         self._canvas.queue_draw()

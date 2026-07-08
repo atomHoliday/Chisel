@@ -13,14 +13,13 @@ import logging
 import time
 from pathlib import Path
 
-DEBUG = True
+DEBUG = False
 LOG_DIR = Path(__file__).parent
 
 logging.basicConfig(
     level=logging.DEBUG if DEBUG else logging.WARNING,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     handlers=[
-        logging.FileHandler(LOG_DIR / "chisel_debug.log"),
         logging.StreamHandler(),
     ],
 )

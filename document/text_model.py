@@ -16,9 +16,9 @@ class TextSpan:
 
 
 def get_page_spans(doc, page_num):
-    if doc._doc is None:
+    if doc.doc is None:
         return []
-    page = doc._doc[page_num]
+    page = doc.doc[page_num]
     blocks = page.get_text("dict")["blocks"]
     spans = []
     for block in blocks:
@@ -49,9 +49,9 @@ def find_span_at(doc, page_num, x, y):
 
 
 def get_page_chars(doc, page_num):
-    if doc._doc is None:
+    if doc.doc is None:
         return []
-    page = doc._doc[page_num]
+    page = doc.doc[page_num]
     blocks = page.get_text("rawdict")["blocks"]
     chars = []
     for block in blocks:

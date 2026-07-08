@@ -322,7 +322,7 @@ class PageSidebar(Gtk.Box):
         self._rows = []
         self._thumb_zoom = 1.0
 
-        self.set_size_request(220, -1)
+        self.set_size_request(180, -1)
         self.set_vexpand(True)
 
         zoom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
@@ -424,8 +424,8 @@ class PageSidebar(Gtk.Box):
     def rebuild(self):
         self._listbox.remove_all()
         self._rows.clear()
-        doc = self._pm._doc
-        if not doc._doc:
+        doc = self._pm.document
+        if not doc.doc:
             return
         alloc = self.get_allocation()
         base = max(120, alloc.width - 24) if alloc.width > 0 else 120
@@ -465,6 +465,9 @@ class ChiselWindow(Adw.ApplicationWindow):
         self._canvas = PdfCanvas()
         self._page_manager = PageManager(self._document)
         self._props = ToolProperties()
+
+        self.connect("notify::default-width", self._on_canvas_size_allocate)
+        self.connect("notify::default-height", self._on_canvas_size_allocate)
 
         self._overlay = Gtk.Overlay()
         self._overlay.set_child(self._canvas)
@@ -644,7 +647,7 @@ class ChiselWindow(Adw.ApplicationWindow):
         paned.set_start_child(self._sidebar)
         paned.set_end_child(self._branding_overlay)
         paned.set_shrink_start_child(False)
-        paned.set_resize_start_child(False)
+        paned.set_position(220)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(headerbar)
@@ -653,13 +656,11 @@ class ChiselWindow(Adw.ApplicationWindow):
         self.set_content(box)
         self._setup_actions()
         self._sidebar_visible = True
-        self._tiled_sidebar_hidden = False
-        self.connect("map", self._on_map)
         self._load_css()
 
     def _load_css(self):
         import os
-        css_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "style.css")
+        css_path = os.path.join(os.path.dirname(__file__), "style.css")
         if not os.path.exists(css_path):
             return
         provider = Gtk.CssProvider()
@@ -672,26 +673,6 @@ class ChiselWindow(Adw.ApplicationWindow):
 
     def _on_continuous_toggled(self, button):
         self._canvas.toggle_continuous()
-
-    def _on_map(self, widget):
-        surface = self.get_surface()
-        if surface is not None:
-            surface.connect("notify::state", self._on_toplevel_state_changed)
-
-    def _on_toplevel_state_changed(self, surface, pspec):
-        state = surface.get_state()
-        tiled = state & Gdk.ToplevelState.TILED
-        if tiled:
-            if self._sidebar_visible and not self._tiled_sidebar_hidden:
-                self._sidebar.set_visible(False)
-                self._tiled_sidebar_hidden = True
-                self._sidebar_button.set_icon_name("sidebar-show-symbolic")
-        else:
-            if self._tiled_sidebar_hidden:
-                self._sidebar.set_visible(self._sidebar_visible)
-                self._tiled_sidebar_hidden = False
-                icon = "sidebar-show-symbolic" if self._sidebar_visible else "sidebar-hide-symbolic"
-                self._sidebar_button.set_icon_name(icon)
 
     def _setup_tools(self):
         self._tools = {
@@ -740,16 +721,10 @@ class ChiselWindow(Adw.ApplicationWindow):
             self._tool_button_map[prev_id].set_active(True)
 
     def _toggle_sidebar(self, button):
-        if self._tiled_sidebar_hidden:
-            self._sidebar_visible = True
-            self._tiled_sidebar_hidden = False
-            self._sidebar.set_visible(True)
-            self._sidebar_button.set_icon_name("sidebar-hide-symbolic")
-        else:
-            self._sidebar_visible = not self._sidebar_visible
-            self._sidebar.set_visible(self._sidebar_visible)
-            icon = "sidebar-show-symbolic" if self._sidebar_visible else "sidebar-hide-symbolic"
-            self._sidebar_button.set_icon_name(icon)
+        self._sidebar_visible = not self._sidebar_visible
+        self._sidebar.set_visible(self._sidebar_visible)
+        icon = "sidebar-show-symbolic" if self._sidebar_visible else "sidebar-hide-symbolic"
+        self._sidebar_button.set_icon_name(icon)
 
     def _setup_actions(self):
         for name in ("open", "save", "save-as", "flatten"):
@@ -843,7 +818,7 @@ class ChiselWindow(Adw.ApplicationWindow):
         if not self._document.is_loaded:
             return
         flatten_annotations(self._document)
-        self._canvas._pixbuf = None
+        self._canvas.invalidate_cache()
         self._canvas.queue_draw()
 
     def open_file(self, path):
@@ -868,26 +843,48 @@ class ChiselWindow(Adw.ApplicationWindow):
         new_scale = self._canvas.scale * factor
         new_scale = max(0.1, min(10.0, new_scale))
         self._canvas._scale = new_scale
-        self._canvas._pixbuf = None
+        self._canvas.invalidate_cache()
         self._canvas.queue_draw()
         self._update_zoom_label()
 
     def _on_fullscreen_changed(self, window, pspec):
         if window.is_fullscreen() or window.is_maximized():
-            GLib.idle_add(self._do_zoom_fit)
+            GLib.timeout_add(200, self._do_zoom_fit)
+
+
+    def _on_canvas_size_allocate(self, window, pspec):
+        if not self._document or not self._document.is_loaded:
+            return
+        alloc = self._canvas.get_allocation()
+        pw, ph = getattr(self, '_prev_alloc_size', (0, 0))
+        if abs(pw - alloc.width) > 50 or abs(ph - alloc.height) > 50:
+            self._prev_alloc_size = (alloc.width, alloc.height)
+            rid = getattr(self, '_resize_fit_id', None)
+            if rid:
+                GLib.source_remove(rid)
+            self._resize_fit_id = GLib.timeout_add(300, self._do_resize_fit)
+        else:
+            self._prev_alloc_size = (alloc.width, alloc.height)
+
+    def _do_resize_fit(self):
+        self._resize_fit_id = 0
+        return self._do_zoom_fit()
 
     def _do_zoom_fit(self):
         if not self._document.is_loaded:
-            return
+            return False
         alloc = self._canvas.get_allocation()
+        if alloc.width <= 0 or alloc.height <= 0:
+            return True
         w, h = self._document.get_page_size(self._canvas.page_num)
         if w > 0 and h > 0:
-            scale_x = alloc.width / w if alloc.width > 0 else 1
-            scale_y = alloc.height / h if alloc.height > 0 else 1
+            scale_x = alloc.width / w
+            scale_y = alloc.height / h
             self._canvas._scale = max(0.1, min(10.0, min(scale_x, scale_y) * 0.95))
-            self._canvas._pixbuf = None
+            self._canvas.invalidate_cache()
             self._canvas.queue_draw()
             self._update_zoom_label()
+        return False
 
     def _go_page(self, delta):
         if not self._document.is_loaded:

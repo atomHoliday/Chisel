@@ -41,8 +41,5 @@ class Tool:
     def draw_overlay(self, cr, width, height, scale, scroll_x, scroll_y):
         pass
 
-    def page_to_canvas(self, px, py, scale, scroll_x, scroll_y):
-        return px * scale + scroll_x, py * scale + scroll_y
-
-    def canvas_to_page(self, cx, cy, scale, scroll_x, scroll_y):
-        return (cx - scroll_x) / scale, (cy - scroll_y) / scale
+    def canvas_to_page(self, cx, cy, scale, draw_x, draw_y):
+        return (cx - draw_x) / scale, (cy - draw_y) / scale

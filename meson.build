@@ -46,7 +46,4 @@ install_data(
     install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
 )
 
-install_data(
-    'com.uncapyeti.chisel-symbolic.svg',
-    install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'symbolic' / 'apps',
-)
+
